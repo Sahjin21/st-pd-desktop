@@ -8,11 +8,11 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Defendant A–Z (Read Only)"
+        <TextBlock Grid.Row="0" Text="Defendant A-Z (Read Only)"
                    FontSize="18" FontWeight="SemiBold" Margin="0,0,0,16"/>
 
         <TextBlock Grid.Row="1"
-                   Text="Full defendant spreadsheet — coming soon"
+                   Text="Full defendant spreadsheet - coming soon"
                    VerticalAlignment="Center" HorizontalAlignment="Center"
                    Foreground="Gray" FontStyle="Italic" FontSize="14"/>
     </Grid>
