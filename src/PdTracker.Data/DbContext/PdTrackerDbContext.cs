@@ -76,6 +76,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasIndex(x => new { x.LastName, x.FirstName });
             e.HasIndex(x => x.ApplicationNumber).IsUnique();
+            e.HasAlternateKey(x => x.ApplicationNumber);
 
             e.HasOne(x => x.Qualify)
                 .WithOne(x => x.Defendant)
