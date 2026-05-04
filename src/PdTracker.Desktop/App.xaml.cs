@@ -89,8 +89,8 @@ public partial class App : Application
                 // No settings, no portable sqlite — show file picker
                 var picked = ShowFilePicker();
                 if (picked == null) { Shutdown(); return; }
-                sqlitePath = picked.SqlitePath;
-                accdbPath = picked.AccdbPath;
+                sqlitePath = picked.Value.sqlitePath;
+                accdbPath = picked.Value.accdbPath;
             }
         }
 

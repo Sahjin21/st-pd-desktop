@@ -4,6 +4,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PdTracker.Desktop.Services;
+using PdTracker.Desktop.Views;
 
 namespace PdTracker.Desktop.ViewModels;
 
