@@ -44,7 +44,6 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<Jurisdiction> Jurisdictions => Set<Jurisdiction>();
     public DbSet<Judge> Judges => Set<Judge>();
     public DbSet<IncomeSource> IncomeSources => Set<IncomeSource>();
-    public DbSet<Core.Entities.Type> Types => Set<Core.Entities.Type>();
     public DbSet<AttorneyListLookups> AttorneyListLookups => Set<AttorneyListLookups>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -542,14 +541,6 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
             e.HasKey(x => x.IncomeSourceCode);
             e.Property(x => x.IncomeSourceCode).HasColumnName("IncomeSource").HasMaxLength(4);
             e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(20);
-        });
-
-        modelBuilder.Entity<Core.Entities.Type>(e =>
-        {
-            e.ToTable("TYPE");
-            e.HasKey(x => x.TypeCode);
-            e.Property(x => x.TypeCode).HasColumnName("TYPE").HasMaxLength(2);
-            e.Property(x => x.TypeDescription).HasColumnName("TYPEDES").HasMaxLength(50);
         });
 
         modelBuilder.Entity<AttorneyListLookups>(e =>
