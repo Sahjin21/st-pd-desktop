@@ -57,25 +57,30 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <StackPanel Grid.Row="0" Visibility="{Binding AppointInfoVm.CurrentAppointment, Converter={StaticResource NullToVisibilityConverter}}">
-                        <TextBlock Text="Appointment History" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                        <DataGrid ItemsSource="{Binding AppointInfoVm.Appointments}"
-                                  SelectedItem="{Binding AppointInfoVm.CurrentAppointment}"
-                                  AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat={}{0:MM/dd/yyyy}}" Width="90"/>
-                                <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="60"/>
-                                <DataGridTextColumn Header="Attorney" Binding="{Binding Attorney.DisplayName}" Width="150"/>
-                                <DataGridTextColumn Header="Date Signed" Binding="{Binding DateSigned, StringFormat={}{0:MM/dd/yyyy}}" Width="90"/>
-                                <DataGridTextColumn Header="Voucher #" Binding="{Binding VoucherNumber}" Width="100"/>
-                                <DataGridCheckBoxColumn Header="GAL" Binding="{Binding GAL}" Width="40"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-                    </StackPanel>
+                    <Grid Grid.Row="0">
+                        <!-- Shows when NO defendant is selected -->
+                        <TextBlock Text="Select a defendant to view appointments"
+                                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                                   Foreground="Gray" FontStyle="Italic"
+                                   Visibility="{Binding AppointInfoVm.CurrentAppointment, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Inverse}"/>
 
-                    <TextBlock Grid.Row="0" Text="Select a defendant to view appointments"
-                               VerticalAlignment="Center" HorizontalAlignment="Center"
-                               Foreground="Gray" FontStyle="Italic"/>
+                        <!-- Shows when defendant IS selected -->
+                        <StackPanel Visibility="{Binding AppointInfoVm.CurrentAppointment, Converter={StaticResource NullToVisibilityConverter}}">
+                            <TextBlock Text="Appointment History" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <DataGrid ItemsSource="{Binding AppointInfoVm.Appointments}"
+                                      SelectedItem="{Binding AppointInfoVm.CurrentAppointment}"
+                                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat={}{0:MM/dd/yyyy}}" Width="90"/>
+                                    <DataGridTextColumn Header="Action" Binding="{Binding Action}" Width="60"/>
+                                    <DataGridTextColumn Header="Attorney" Binding="{Binding Attorney.DisplayName}" Width="150"/>
+                                    <DataGridTextColumn Header="Date Signed" Binding="{Binding DateSigned, StringFormat={}{0:MM/dd/yyyy}}" Width="90"/>
+                                    <DataGridTextColumn Header="Voucher #" Binding="{Binding VoucherNumber}" Width="100"/>
+                                    <DataGridCheckBoxColumn Header="GAL" Binding="{Binding GAL}" Width="40"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </Grid>
                 </Grid>
             </TabItem>
 

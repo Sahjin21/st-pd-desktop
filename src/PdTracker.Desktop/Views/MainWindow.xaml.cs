@@ -16,6 +16,7 @@ public partial class MainWindow : Window
 
     private void OnNavigationRequested(object? sender, string viewName)
     {
+        if (ContentArea == null) return; // Safety guard
         ContentArea.Content = null;
         object? vm = viewName switch
         {

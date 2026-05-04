@@ -25,7 +25,12 @@ public class InverseBoolToVisibilityConverter : IValueConverter
 public class NullToVisibilityConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object parameter, CultureInfo culture)
-        => value != null ? Visibility.Visible : Visibility.Collapsed;
+    {
+        bool isNull = value == null;
+        bool inverse = parameter?.ToString() == "Inverse";
+        bool visible = inverse ? isNull : !isNull;
+        return visible ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
