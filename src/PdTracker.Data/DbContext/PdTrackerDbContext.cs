@@ -481,11 +481,11 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
             e.Property(x => x.Type).HasColumnName("Type").HasMaxLength(2)
                 .HasConversion(
                     v => v.HasValue ? v.Value.ToString() : null,
-                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Type>(v, true, out var result) ? result : null);
+                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Core.Entities.Type>(v, true, out var result) ? result : null);
             e.Property(x => x.ApplicationType).HasColumnName("ApplicationType").HasMaxLength(2)
                 .HasConversion(
                     v => v.HasValue ? v.Value.ToString() : null,
-                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Type>(v, true, out var result) ? result : null);
+                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Core.Entities.Type>(v, true, out var result) ? result : null);
             e.Property(x => x.Judge).HasColumnName("Judge").HasMaxLength(50);
             e.Property(x => x.EIAResult).HasColumnName("EIAResult").HasMaxLength(50);
             e.Property(x => x.Jail).HasColumnName("jail").HasMaxLength(50);
