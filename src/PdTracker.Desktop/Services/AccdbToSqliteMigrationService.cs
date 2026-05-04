@@ -1,16 +1,26 @@
-using System.Data;
-using System.Data.OleDb;
+using System.Runtime.InteropServices;
+using Microsoft.Office.Interop.Access.Dao;
 using Microsoft.EntityFrameworkCore;
 using PdTracker.Core.Entities;
 using PdTracker.Data.DbContext;
 
 namespace PdTracker.Desktop.Services;
 
+/// <summary>
+/// Migrates data from a legacy Access .accdb file to SQLite.
+/// Uses DAO to distinguish local tables from linked tables — linked tables
+/// (which forward to an inaccessible BE) are skipped entirely.
+/// </summary>
 public class AccdbToSqliteMigrationService
 {
     private readonly string _accdbPath;
     private readonly string _sqlitePath;
-    private OleDbConnection? _accdbConn;
+    private DBEngine? _daoEngine;
+    private Database? _daoDb;
+
+    // DAO table attribute flags
+    private const int dbAttachedTable = 0x80000002; // linked table
+    private const int dbHiddenObject = 0x00000001;   // hidden system object
 
     public event Action<string>? OnProgress;
 
@@ -22,778 +32,1091 @@ public class AccdbToSqliteMigrationService
 
     public void TestAccessConnection()
     {
-        var connString = BuildAceConnectionString(_accdbPath);
-        _accdbConn = new OleDbConnection(connString);
-        _accdbConn.Open();
+        _daoEngine = new DBEngine();
+        _daoDb = _daoEngine.OpenDatabase(_accdbPath);
     }
 
     public void Run()
     {
-        if (_accdbConn == null || _accdbConn.State != ConnectionState.Open)
+        if (_daoDb == null)
             TestAccessConnection();
 
         CreateSqliteDatabase();
 
-        MigrateTable("DEFENDANT", MigrateDefendant);
-        MigrateTable("ATTORNEY_LIST", MigrateAttorneyList);
-        MigrateTable("QUALIFY", MigrateQualify);
-        MigrateTable("DEF_ADDRESS", MigrateDefAddress);
-        MigrateTable("DEF_PHONE", MigrateDefPhone);
-        MigrateTable("DEF_SPOUSE", MigrateDefSpouse);
-        MigrateTable("DEF_ALIAS", MigrateDefAlias);
-        MigrateTable("DEPENDENT", MigrateDependent);
-        MigrateTable("FIN_EMPLOYER", MigrateFinEmployer);
-        MigrateTable("FIN_SPEMPLOYER", MigrateFinSpEmployer);
-        MigrateTable("FIN_UNEMPLOYED", MigrateFinUnemployed);
-        MigrateTable("FIN_SPUNEMPLOY", MigrateFinSpUnemploy);
-        MigrateTable("FINANCE_AUTO", MigrateFinAuto);
-        MigrateTable("FINANCE_BANK", MigrateFinBank);
-        MigrateTable("FINANCE_HOME", MigrateFinHome);
-        MigrateTable("FINANCE_RENT", MigrateFinRent);
-        MigrateTable("FINANCE_OTHER", MigrateFinOther);
-        MigrateTable("CHARGE", MigrateCharge);
-        MigrateTable("WARRANT", MigrateWarrant);
-        MigrateTable("APPOINTMENT", MigrateAppointment);
-        MigrateTable("VOUCHER", MigrateVoucher);
-        MigrateTable("EIA", MigrateEIA);
-        MigrateTable("CHARGE_ID", MigrateChargeId);
-        MigrateTable("DENIAL_CODE", MigrateDenialCode);
-        MigrateTable("REMOVAL_CODE", MigrateRemovalCode);
-        MigrateTable("JURISDICTION", MigrateJurisdiction);
-        MigrateTable("JUDGE", MigrateJudge);
-        MigrateTable("INCOME_SOURCE", MigrateIncomeSource);
-        MigrateTable("TYPE", MigrateType);
+        // Use DAO to enumerate tables and filter local-only
+        var tableDefs = _daoDb!.TableDefs;
 
-        OnProgress?.Invoke("Migration complete.");
+        var localTables = new List<(string Name, bool IsLocal)>();
+        for (int i = 0; i < tableDefs.Count; i++)
+        {
+            var td = tableDefs[i];
+            var name = td.Name;
+            var attrs = td.Attributes;
+
+            // Skip hidden/system tables and MSys* tables
+            if (name.StartsWith("MSys", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith("~", StringComparison.Ordinal))
+                continue;
+
+            // Skip linked tables (attrs & dbAttachedTable != 0)
+            bool isLinked = (attrs & dbAttachedTable) != 0;
+            localTables.Add((name, !isLinked));
+        }
+
+        // Log table inventory
+        OnProgress?.Invoke($"Found {localTables.Count} table(s) in accdb");
+        foreach (var (name, isLocal) in localTables)
+            OnProgress?.Invoke($"  {(isLocal ? "LOCAL " : "LINKED")} : {name}");
+
+        // Migrate each local table
+        if (TableHasData("DEFENDANT")) MigrateDefendant();
+        if (TableHasData("ATTORNEY_LIST")) MigrateAttorneyList();
+        if (TableHasData("QUALIFY")) MigrateQualify();
+        if (TableHasData("DEF_ADDRESS")) MigrateDefAddress();
+        if (TableHasData("DEF_PHONE")) MigrateDefPhone();
+        if (TableHasData("DEF_SPOUSE")) MigrateDefSpouse();
+        if (TableHasData("DEF_ALIAS")) MigrateDefAlias();
+        if (TableHasData("DEPENDENT")) MigrateDependent();
+        if (TableHasData("FIN_EMPLOYER")) MigrateFinEmployer();
+        if (TableHasData("FIN_SPEMPLOYER")) MigrateFinSpEmployer();
+        if (TableHasData("FIN_UNEMPLOYED")) MigrateFinUnemployed();
+        if (TableHasData("FIN_SPUNEMPLOY")) MigrateFinSpUnemploy();
+        if (TableHasData("FINANCE_AUTO")) MigrateFinAuto();
+        if (TableHasData("FINANCE_BANK")) MigrateFinBank();
+        if (TableHasData("FINANCE_HOME")) MigrateFinHome();
+        if (TableHasData("FINANCE_RENT")) MigrateFinRent();
+        if (TableHasData("FINANCE_OTHER")) MigrateFinOther();
+        if (TableHasData("CHARGE")) MigrateCharge();
+        if (TableHasData("WARRANT")) MigrateWarrant();
+        if (TableHasData("APPOINTMENT")) MigrateAppointment();
+        if (TableHasData("VOUCHER")) MigrateVoucher();
+        if (TableHasData("EIA")) MigrateEIA();
+        if (TableHasData("CHARGE_ID")) MigrateLookup("CHARGE_ID", "Lookups");
+        if (TableHasData("DENIAL_CODE")) MigrateLookup("DENIAL_CODE", "DenialCodes");
+        if (TableHasData("REMOVAL_CODE")) MigrateLookup("REMOVAL_CODE", "RemovalCodes");
+        if (TableHasData("JURISDICTION")) MigrateLookup("JURISDICTION", "Jurisdictions");
+        if (TableHasData("JUDGE")) MigrateLookup("JUDGE", "Judges");
+        if (TableHasData("INCOME_SOURCE")) MigrateLookup("INCOME_SOURCE", "IncomeSources");
+        if (TableHasData("TYPE")) MigrateLookup("TYPE", "Types");
+
+        CloseDao();
+    }
+
+    /// <summary>Check if a table is present and has records via DAO recordset.</summary>
+    private bool TableHasData(string tableName)
+    {
+        try
+        {
+            if (_daoDb == null) return false;
+            var rs = _daoDb.OpenRecordset($"SELECT TOP 1 * FROM [{tableName}]");
+            bool hasData = !rs.EOF;
+            rs.Close();
+            return hasData;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void CloseDao()
+    {
+        try { _daoDb?.Close(); } catch { }
+        try { Marshal.ReleaseComObject(_daoDb); } catch { }
+        try { Marshal.ReleaseComObject(_daoEngine); } catch { }
+        _daoDb = null;
+        _daoEngine = null;
     }
 
     private void CreateSqliteDatabase()
     {
         OnProgress?.Invoke("Creating SQLite database...");
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
 
-        var optionsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optionsBuilder.UseSqlite($"Data Source={_sqlitePath}");
+        if (File.Exists(_sqlitePath))
+            File.Delete(_sqlitePath);
 
-        using var db = new PdTrackerDbContext(optionsBuilder.Options);
+        using var db = new PdTrackerDbContext(MakeOpts().Options);
         db.Database.EnsureCreated();
+        OnProgress?.Invoke("SQLite database created.");
     }
 
-    private void MigrateTable(string tableName, Action<OleDbDataReader> migrateFn)
-    {
-        OnProgress?.Invoke($"  Migrating {tableName}...");
-        try
-        {
-            using var cmd = _accdbConn!.CreateCommand();
-            cmd.CommandText = $"SELECT * FROM [{tableName}]";
-            using var reader = cmd.ExecuteReader();
-            migrateFn(reader);
-        }
-        catch (Exception ex)
-        {
-            OnProgress?.Invoke($"  WARNING: {tableName} skipped — {ex.Message}");
-        }
-    }
-
-    private static DbContextOptionsBuilder<PdTrackerDbContext> MakeOpts(string dbPath)
+    private DbContextOptionsBuilder<PdTrackerDbContext> MakeOpts()
     {
         var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={dbPath}");
+        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
         return optsBuilder;
     }
 
-    private void MigrateDefendant(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Defendant
-            {
-                DefendantId = GetString(r, "DefendantID", 9),
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                SOID = GetString(r, "SOID", 255),
-                FirstName = GetString(r, "FirstName", 50),
-                MiddleName = GetString(r, "MiddleName", 50),
-                LastName = GetString(r, "LastName", 50),
-                DOB = GetDateTime(r, "DOB"),
-                Education = GetString(r, "Education", 50),
-                Race = GetString(r, "Race", 255),
-                Sex = GetString(r, "Sex", 255),
-                Reference1 = GetString(r, "Reference1", 75),
-                Reference2 = GetString(r, "Reference2", 75),
-                Dependants = GetInt32Nullable(r, "dependants"),
-                DepDescription = GetString(r, "dep_description", 25),
-                DepOther = GetString(r, "dep_other", 20),
-                DateAdded = GetDateTime(r, "DateAdded"),
-            };
-            db.Defendants.Add(e);
-        }
-        db.SaveChanges();
-    }
+    // ─── Migration helpers ────────────────────────────────────────────────────
 
-    private void MigrateAttorneyList(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new AttorneyList
-            {
-                AttyCode = GetString(r, "AttyCode", 10),
-                FirstName = GetString(r, "FirstName", 50),
-                MiddleName = GetString(r, "MiddleName", 50),
-                LastName = GetString(r, "LastName", 50),
-                Street = GetString(r, "Street", 100),
-                Suite = GetString(r, "Suite", 20),
-                City = GetString(r, "City", 50),
-                State = GetString(r, "State", 2),
-                ZipCode = GetString(r, "ZipCode", 10),
-                Email = GetString(r, "Email", 100),
-                OfficeNumber = GetString(r, "OfficeNumber", 20),
-                FaxNumber = GetString(r, "FaxNumber", 20),
-                HomeNumber = GetString(r, "HomeNumber", 20),
-                PagerNumber = GetString(r, "PagerNumber", 20),
-                MobileNumber = GetString(r, "MobileNumber", 20),
-                OtherNumber = GetString(r, "OtherNumber", 20),
-                PhoneType = GetString(r, "PhoneType", 20),
-                Date = GetDateTime(r, "Date"),
-                Status = GetEnum<AttorneyStatus>(r, "Status"),
-                DeathPenalty = GetBool(r, "Deathpenalty"),
-                Murder = GetBool(r, "Murder"),
-                Felony = GetBool(r, "Felony"),
-                Misd = GetBool(r, "Misd"),
-                Appeal = GetBool(r, "Appeal"),
-                Juvenile = GetBool(r, "Juvenile"),
-                GAL = GetBool(r, "GAL"),
-                VendorNumber = GetString(r, "VenderNumber", 20),
-                Notes = GetString(r, "Notes", 255),
-            };
-            db.AttorneyLists.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateQualify(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Qualify
-            {
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                Date = GetDateTime(r, "Date"),
-                NoAction = GetBool(r, "NoAction"),
-                Comment = GetString(r, "Comment", 1000),
-                CourtInformation = GetString(r, "CourtInformation", 1000),
-                Military = GetBool(r, "Military"),
-                EntryDate = GetDateTime(r, "Entrydate"),
-                DefendantId = GetString(r, "DefendantID", 9),
-            };
-            db.Qualifies.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDefAddress(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new DefAddress
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                Street = GetString(r, "Street", 100),
-                City = GetString(r, "City", 50),
-                State = GetString(r, "State", 2),
-                ZipCode = GetString(r, "ZipCode", 10),
-                AddressFlag = GetEnum<AddressFlag>(r, "AddressFlag"),
-            };
-            db.DefAddresses.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDefPhone(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new DefPhone
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                PhoneNumber = GetString(r, "PhoneNumber", 20),
-                PhoneType = GetString(r, "PhoneType", 20),
-            };
-            db.DefPhones.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDefSpouse(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new DefSpouse
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                FirstName = GetString(r, "FirstName", 50),
-                MiddleName = GetString(r, "MiddleName", 50),
-                LastName = GetString(r, "LastName", 50),
-                Employed = GetBool(r, "Employed"),
-                SpouseCounter = GetInt32Nullable(r, "SpouseCounter"),
-            };
-            db.DefSpouses.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDefAlias(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new DefAlias
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                FirstName = GetString(r, "FirstName", 50),
-                MiddleName = GetString(r, "MiddleName", 50),
-                LastName = GetString(r, "LastName", 50),
-            };
-            db.DefAliases.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDependent(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Dependent
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                FirstName = GetString(r, "FirstName", 50),
-                MiddleName = GetString(r, "MiddleName", 50),
-                LastName = GetString(r, "LastName", 50),
-            };
-            db.Dependents.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinEmployer(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinEmployer
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                EmployerCounter = GetInt32Nullable(r, "EmployerCounter"),
-                EmployerName = GetString(r, "EmployerName", 100),
-                City = GetString(r, "City", 50),
-                Phone = GetString(r, "Phone", 20),
-                PayAmt = GetDecimal(r, "PayAmt"),
-                PayPeriod = GetString(r, "PayPeriod", 20),
-                NetOrGross = GetString(r, "NetOrGross", 10),
-                TimeEmployed = GetString(r, "TimeEmployed", 50),
-            };
-            db.FinEmployers.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinSpEmployer(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinSpEmployer
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                SpEmployerCounter = GetInt32Nullable(r, "SpemployCounter"),
-                EmployerName = GetString(r, "EmployerName", 100),
-                City = GetString(r, "City", 50),
-                Phone = GetString(r, "Phone", 20),
-                PayAmt = GetDecimal(r, "PayAmt"),
-                PayPeriod = GetString(r, "PayPeriod", 20),
-            };
-            db.FinSpEmployers.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinUnemployed(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinUnemployed
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                UnemployCounter = GetInt32Nullable(r, "UnemployCounter"),
-                IncomeSource = GetEnum<IncomeSourceType>(r, "IncomeSource"),
-                Description = GetString(r, "Description", 255),
-                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
-                PayPeriod = GetString(r, "PayPeriod", 20),
-                PayAmt = GetDecimal(r, "PayAmt"),
-            };
-            db.FinUnemployeds.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinSpUnemploy(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinSpUnemploy
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                SpUnemployCounter = GetInt32Nullable(r, "SpunemployCounter"),
-                IncomeSource = GetEnum<IncomeSourceType>(r, "IncomeSource"),
-                Description = GetString(r, "Description", 255),
-                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
-                PayPeriod = GetString(r, "PayPeriod", 20),
-                PayAmt = GetDecimal(r, "PayAmt"),
-            };
-            db.FinSpUnemploys.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinAuto(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinAuto
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                AutoCounter = GetInt32Nullable(r, "AutoCounter"),
-                Model = GetString(r, "Model", 50),
-                Year = GetString(r, "Year", 4),
-                Balance = GetDecimal(r, "Balance"),
-            };
-            db.FinAutos.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinBank(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinBank
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                BankCounter = GetInt32Nullable(r, "BankCounter"),
-                BankName = GetString(r, "BankName", 100),
-                AccountType = GetString(r, "AccountType", 50),
-                Balance = GetDecimal(r, "Balance"),
-            };
-            db.FinBanks.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinHome(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinHome
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                HomeCounter = GetInt32Nullable(r, "HomeCounter"),
-                MortgagePay = GetDecimal(r, "MortgagePay"),
-                HomeValue = GetDecimal(r, "HomeValue"),
-                MortgageBalance = GetDecimal(r, "MortgageBalance"),
-            };
-            db.FinHomes.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinRent(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinRent
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                RentCounter = GetInt32Nullable(r, "RentCounter"),
-                MonthlyRent = GetDecimal(r, "MonthlyRent"),
-            };
-            db.FinRents.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateFinOther(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new FinOther
-            {
-                DefendantId = GetString(r, "ApplicationNumber", 9),
-                OtherCounter = GetInt32Nullable(r, "OtherCounter"),
-                Type = GetString(r, "Type", 50),
-                Description = GetString(r, "Description", 255),
-                MonthlyAmount = GetDecimal(r, "MonthlyAmount"),
-                TotalAmount = GetDecimal(r, "TotalAmount"),
-            };
-            db.FinOthers.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateCharge(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Charge
-            {
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                ChargeNumber = GetInt32Nullable(r, "ChargeNumber"),
-                ChargeType = GetString(r, "ChargeType", 50),
-                CaseNumber = GetString(r, "CaseNumber", 20),
-                ChargeDate = GetDateTime(r, "ChargeDate"),
-                AddCharge = GetString(r, "AddCharge", 255),
-                WarrantNumber = GetString(r, "WarrantNumber", 20),
-                ChargeId = GetString(r, "ChargeID", 20),
-                Description = GetString(r, "Description", 255),
-            };
-            db.Charges.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateWarrant(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Warrant
-            {
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                WarrantNumber = GetString(r, "WarrantNumber", 20),
-                CaseNumber = GetString(r, "CaseNumber", 20),
-                Date = GetDateTime(r, "Date"),
-                ArrestDate = GetDateTime(r, "ArrestDate"),
-                JurisdictionCode = GetEnumNullable<JurisdictionCode>(r, "JurisdictionCode"),
-                BondType = GetString(r, "BondType", 20),
-                BondAmt = GetDecimal(r, "BondAmt"),
-                Jail = GetBoolNullable(r, "Jail"),
-                AddOnCase = GetString(r, "AddOnCase", 255),
-            };
-            db.Warrants.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateAppointment(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Appointment
-            {
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                AttyCode = GetString(r, "AttyCode", 10),
-                Date = GetDateTime(r, "Date"),
-                Action = GetString(r, "Action", 5),
-                DateSigned = GetDateTime(r, "DateSigned"),
-                DenyCode = GetString(r, "DenyCode", 10),
-                RemovalCode = GetString(r, "RemovalCode", 10),
-                Bonded = GetBoolNullable(r, "Bonded"),
-                GAL = GetBoolNullable(r, "GAL"),
-                VoucherNumber = GetString(r, "VoucherNumber", 20),
-                VoucherLetter = GetString(r, "VoucherLetter", 5),
-                ContractCase = GetBoolNullable(r, "ContractCase"),
-                DUICourt = GetBoolNullable(r, "DUICourt"),
-                JuvenileSubstType = GetString(r, "JuvenileSubstType", 50),
-            };
-            db.Appointments.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateVoucher(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Voucher
-            {
-                VoucherNumber = GetString(r, "VoucherNumber", 20),
-                VoucherLetter = GetString(r, "VoucherLetter", 5),
-                ApplicationNumber = GetInt32Nullable(r, "ApplicationNumber") ?? 0,
-                AttyCode = GetString(r, "AttyCode", 10),
-                DateVchrPaid = GetDateTime(r, "DateVchrPaid"),
-                DateCaseCompleted = GetDateTime(r, "DateCaseCompleted"),
-                InCourtHours = GetDecimal(r, "InCourtHours"),
-                OutCourtHours = GetDecimal(r, "OutCourtHours"),
-                CourtOrderedReimburse = GetDecimal(r, "CourtOrderedReimburse"),
-                TotalVoucherAmt = GetDecimal(r, "TotalVoucherAmt"),
-                TotalAmountPaid = GetDecimal(r, "TotalAmountPaid"),
-                Outcome = GetEnumNullable<VoucherOutcome>(r, "Outcome"),
-                OutcomeOther = GetString(r, "OutcomeOther", 255),
-            };
-            db.Vouchers.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateEIA(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        // Build lookup: ApplicationNumber → DefendantId from already-migrated DEFENDANT table
-        var defendantLookup = db.Defendants
-            .ToDictionary(d => d.ApplicationNumber, d => d.DefendantId);
-
-        while (r.Read())
-        {
-            var appNum = GetInt32(r, "ApplicationNumber");
-            var e = new EIA
-            {
-                ApplicationNumber = appNum,
-                DefendantId = defendantLookup.GetValueOrDefault(appNum),
-                Judge = GetString(r, "Judge", 50),
-                EIAResult = GetString(r, "EIAResult", 50),
-                Jail = GetString(r, "jail", 50),
-                Probation = GetString(r, "probation", 50),
-                Reimbursement = GetDecimal(r, "Reimbursement"),
-                Bond = GetDecimal(r, "bond"),
-            };
-            db.EIAs.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateChargeId(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new ChargeId
-            {
-                ChargeIdCode = GetString(r, "ChargeID", 10),
-                Description = GetString(r, "Description", 255),
-                ChargeSelect = GetString(r, "CHARGESELECT", 50),
-            };
-            db.ChargeIds.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateDenialCode(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new DenialCode
-            {
-                DenyCode = GetString(r, "DenyCode", 2),
-                Description = GetString(r, "Description", 30),
-                LongText = GetString(r, "Long text", 100),
-            };
-            db.DenialCodes.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateRemovalCode(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new RemovalCode
-            {
-                RemovalCodeValue = GetString(r, "RemovalCode", 2),
-                Description = GetString(r, "Description", 20),
-                Statement = GetString(r, "Statement", 100),
-            };
-            db.RemovalCodes.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateJurisdiction(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Jurisdiction
-            {
-                JurisdictionCode = GetString(r, "JurisdictionCode", 3),
-                Description = GetString(r, "Description", 30),
-            };
-            db.Jurisdictions.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateJudge(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Judge
-            {
-                JudgeCode = GetString(r, "JudgeCode", 2),
-                Description = GetString(r, "description", 20),
-            };
-            db.Judges.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateIncomeSource(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new IncomeSource
-            {
-                IncomeSourceCode = GetString(r, "IncomeSource", 4),
-                Description = GetString(r, "Description", 20),
-            };
-            db.IncomeSources.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    private void MigrateType(OleDbDataReader r)
-    {
-        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
-        while (r.Read())
-        {
-            var e = new Core.Entities.Type
-            {
-                TypeCode = GetString(r, "TYPE", 2),
-                TypeDescription = GetString(r, "TYPEDES", 50),
-            };
-            db.Types.Add(e);
-        }
-        db.SaveChanges();
-    }
-
-    // --- Safe accessors ---
-    private static string GetString(OleDbDataReader r, string name, int maxLen)
+    private T GetFieldValue<T>(Recordset rs, string fieldName)
     {
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return "";
-            var s = val.ToString() ?? "";
-            return s.Length > maxLen ? s[..maxLen] : s;
+            var fld = rs.Fields[fieldName];
+            if (fld.Value == null || fld.Value == DBNull.Value)
+                return default!;
+            return (T)fld.Value;
         }
-        catch { return ""; }
+        catch
+        {
+            return default!;
+        }
     }
 
-    private static int GetInt32(OleDbDataReader r, string name)
+    private string? GetString(Recordset rs, string fieldName, int maxLen = 255)
     {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        if (val == null) return null;
+        var s = val.ToString() ?? "";
+        return s.Length > maxLen ? s[..maxLen] : s;
+    }
+
+    private int GetInt32(Recordset rs, string fieldName)
+    {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        return val switch
+        {
+            int i => i,
+            long l => (int)l,
+            double d => (int)d,
+            decimal dec => (int)dec,
+            _ => 0
+        };
+    }
+
+    private int? GetInt32Nullable(Recordset rs, string fieldName)
+    {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        if (val == null || val == DBNull.Value) return null;
+        return val switch
+        {
+            int i => i,
+            long l => (int)l,
+            double d => (int)d,
+            decimal dec => (int)dec,
+            _ => null
+        };
+    }
+
+    private bool GetBool(Recordset rs, string fieldName)
+    {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        return val switch
+        {
+            bool b => b,
+            int i => i != 0,
+            _ => false
+        };
+    }
+
+    private DateTime? GetDateTime(Recordset rs, string fieldName)
+    {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        if (val == null) return null;
+        if (val is DateTime dt) return dt;
+        if (DateTime.TryParse(val.ToString(), out var parsed)) return parsed;
+        return null;
+    }
+
+    private double? GetDoubleNullable(Recordset rs, string fieldName)
+    {
+        var val = GetFieldValue<object?>(rs, fieldName);
+        if (val == null || val == DBNull.Value) return null;
+        if (val is double d) return d;
+        if (val is decimal dec) return (double)dec;
+        if (val is int i) return i;
+        return null;
+    }
+
+    private static Core.Entities.Type? ParseTypeEnum(string? val)
+    {
+        if (string.IsNullOrEmpty(val)) return null;
+        return val.ToUpperInvariant() switch
+        {
+            "F" => Core.Entities.Type.F,
+            "M" => Core.Entities.Type.M,
+            "O" => Core.Entities.Type.O,
+            _ => null
+        };
+    }
+
+    // ─── Table migrators ─────────────────────────────────────────────────────
+
+    private void MigrateDefendant()
+    {
+        OnProgress?.Invoke("Migrating DEFENDANT...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return 0;
-            return Convert.ToInt32(val);
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEFENDANT");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Defendant
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    SOID = GetString(rs, "SOID", 20),
+                    FirstName = GetString(rs, "FirstName", 50) ?? "",
+                    MiddleName = GetString(rs, "MiddleName", 50),
+                    LastName = GetString(rs, "LastName", 50) ?? "",
+                    DOB = GetDateTime(rs, "DOB"),
+                    Education = GetString(rs, "Education", 50),
+                    Race = GetString(rs, "Race", 20),
+                    Sex = GetString(rs, "Sex", 10),
+                    Reference1 = GetString(rs, "Reference1", 100),
+                    Reference2 = GetString(rs, "Reference2", 100),
+                    DefPhoto = GetString(rs, "defphoto"),
+                    DefSignature = GetString(rs, "defsignature"),
+                    Dependants = GetInt32Nullable(rs, "dependants"),
+                    DepDescription = GetString(rs, "dep_description"),
+                    DepOther = GetString(rs, "dep_other"),
+                    DateAdded = GetDateTime(rs, "DateAdded") ?? DateTime.Now,
+                };
+                db.Defendants.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEFENDANT records.");
         }
-        catch { return 0; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEFENDANT: {ex.Message}");
+        }
     }
 
-    private static int? GetInt32Nullable(OleDbDataReader r, string name)
+    private void MigrateAttorneyList()
     {
+        OnProgress?.Invoke("Migrating ATTORNEY_LIST...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return null;
-            return Convert.ToInt32(val);
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM ATTORNEY_LIST");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new AttorneyList
+                {
+                    AttyCode = GetString(rs, "AttyCode", 10) ?? "",
+                    FirstName = GetString(rs, "FirstName", 50) ?? "",
+                    MiddleName = GetString(rs, "MiddleName", 50),
+                    LastName = GetString(rs, "LastName", 50) ?? "",
+                    Street = GetString(rs, "Street", 100),
+                    Suite = GetString(rs, "Suite", 20),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    Phone1 = GetString(rs, "Phone1", 20),
+                    Phone2 = GetString(rs, "Phone2", 20),
+                    Fax = GetString(rs, "Fax", 20),
+                    Email = GetString(rs, "Email", 100),
+                    BarNum = GetString(rs, "BarNum", 20),
+                    Status = ParseAttorneyStatus(GetString(rs, "Status")),
+                };
+                db.AttorneyLists.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} ATTORNEY_LIST records.");
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR ATTORNEY_LIST: {ex.Message}");
+        }
     }
 
-    private static bool GetBool(OleDbDataReader r, string name)
+    private static AttorneyStatus ParseAttorneyStatus(string? val)
+        => val?.ToUpperInvariant() switch
+        {
+            "A" => AttorneyStatus.A,
+            "I" => AttorneyStatus.I,
+            "R" => AttorneyStatus.R,
+            _ => AttorneyStatus.A
+        };
+
+    private void MigrateQualify()
     {
+        OnProgress?.Invoke("Migrating QUALIFY...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return false;
-            if (val is bool b) return b;
-            if (val is int i) return i != 0;
-            var s = val.ToString()?.ToUpperInvariant();
-            return s == "TRUE" || s == "T" || s == "1" || s == "-1";
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM QUALIFY");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Qualify
+                {
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    Date = GetDateTime(rs, "Date"),
+                    NoAction = GetBool(rs, "NoAction"),
+                    CourtInformation = GetString(rs, "CourtInfo"),
+                    Military = GetBool(rs, "Military"),
+                    Comment = GetString(rs, "Comment"),
+                    DefendantId = GetString(rs, "DefendantID", 9),
+                };
+                db.Qualifies.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} QUALIFY records.");
         }
-        catch { return false; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR QUALIFY: {ex.Message}");
+        }
     }
 
-    private static bool? GetBoolNullable(OleDbDataReader r, string name)
+    private void MigrateDefAddress()
     {
+        OnProgress?.Invoke("Migrating DEF_ADDRESS...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return null;
-            if (val is bool b) return b;
-            if (val is int i) return i != 0;
-            var s = val.ToString()?.ToUpperInvariant();
-            return s == "TRUE" || s == "T" || s == "1" || s == "-1";
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEF_ADDRESS");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new DefAddress
+                {
+                    DefAddressCounter = GetInt32(rs, "DefAddressCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    AddressFlag = ParseAddressFlag(GetString(rs, "AddressFlag"))[0],
+                    Street = GetString(rs, "Street", 100),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    Status = GetString(rs, "Status", 20),
+                };
+                db.DefAddresses.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_ADDRESS records.");
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEF_ADDRESS: {ex.Message}");
+        }
     }
 
-    private static decimal GetDecimal(OleDbDataReader r, string name)
+    private AddressFlag[] ParseAddressFlag(string? val)
     {
+        if (string.IsNullOrEmpty(val)) return [];
+        return val.ToUpperInvariant().Select(c => c switch
+        {
+            'M' => AddressFlag.M,
+            'P' => AddressFlag.P,
+            'B' => AddressFlag.B,
+            'R' => AddressFlag.R,
+            _ => AddressFlag.M
+        }).ToArray();
+    }
+
+    private void MigrateDefPhone()
+    {
+        OnProgress?.Invoke("Migrating DEF_PHONE...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return 0m;
-            return Convert.ToDecimal(val);
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEF_PHONE");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new DefPhone
+                {
+                    DefPhoneCounter = GetInt32(rs, "DefPhoneCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    PhoneFlag = GetString(rs, "PhoneFlag", 10) ?? "",
+                    PhoneNumber = GetString(rs, "PhoneNumber", 20),
+                    Description = GetString(rs, "Description", 50),
+                };
+                db.DefPhones.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_PHONE records.");
         }
-        catch { return 0m; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEF_PHONE: {ex.Message}");
+        }
     }
 
-    private static DateTime GetDateTime(OleDbDataReader r, string name)
+    private void MigrateDefSpouse()
     {
+        OnProgress?.Invoke("Migrating DEF_SPOUSE...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return DateTime.MinValue;
-            return Convert.ToDateTime(val);
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEF_SPOUSE");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new DefSpouse
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    FirstName = GetString(rs, "FirstName", 50),
+                    MiddleName = GetString(rs, "MiddleName", 50),
+                    LastName = GetString(rs, "LastName", 50),
+                    Employed = GetBool(rs, "Employed"),
+                    SpouseCounter = GetInt32Nullable(rs, "SpouseCounter"),
+                };
+                db.DefSpouses.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_SPOUSE records.");
         }
-        catch { return DateTime.MinValue; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEF_SPOUSE: {ex.Message}");
+        }
     }
 
-    private static T GetEnum<T>(OleDbDataReader r, string name) where T : struct, Enum
+    private void MigrateDefAlias()
     {
+        OnProgress?.Invoke("Migrating DEF_ALIAS...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return default;
-            var s = val.ToString() ?? "";
-            return Enum.TryParse<T>(s, true, out var result) ? result : default;
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEF_ALIAS");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new DefAlias
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    FirstName = GetString(rs, "FirstName", 50),
+                    MiddleName = GetString(rs, "MiddleName", 50),
+                    LastName = GetString(rs, "LastName", 50),
+                };
+                db.DefAliases.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_ALIAS records.");
         }
-        catch { return default; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEF_ALIAS: {ex.Message}");
+        }
     }
 
-    private static T? GetEnumNullable<T>(OleDbDataReader r, string name) where T : struct, Enum
+    private void MigrateDependent()
     {
+        OnProgress?.Invoke("Migrating DEPENDENT...");
         try
         {
-            var val = r[name];
-            if (val == null || val == DBNull.Value) return null;
-            var s = val.ToString() ?? "";
-            return Enum.TryParse<T>(s, true, out var result) ? result : null;
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM DEPENDENT");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Dependent
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DependentCounter = GetInt32Nullable(rs, "DependentCounter") ?? 0,
+                    FirstName = GetString(rs, "FirstName", 50),
+                    LastName = GetString(rs, "LastName", 50),
+                    Relation = GetString(rs, "Relation", 20),
+                    DOB = GetDateTime(rs, "DOB"),
+                    Education = GetString(rs, "Education", 50),
+                };
+                db.Dependents.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEPENDENT records.");
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR DEPENDENT: {ex.Message}");
+        }
     }
 
-    private static string BuildAceConnectionString(string accdbPath)
+    private void MigrateFinEmployer()
     {
-        return $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={accdbPath};Persist Security Info=False;";
+        OnProgress?.Invoke("Migrating FIN_EMPLOYER...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FIN_EMPLOYER");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinEmployer
+                {
+                    EmployerCounter = GetInt32(rs, "EmployerCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    EmployerName = GetString(rs, "EmployerName", 100),
+                    EmployerAddress = GetString(rs, "EmployerAddress", 150),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    HourlyRate = GetDoubleNullable(rs, "HourlyRate"),
+                    HoursPerWeek = GetDoubleNullable(rs, "HoursPerWeek"),
+                    PayFrequency = GetString(rs, "PayFrequency", 20),
+                    StartDate = GetDateTime(rs, "StartDate"),
+                    Supervisor = GetString(rs, "Supervisor", 100),
+                    SupervisorPhone = GetString(rs, "SupervisorPhone", 20),
+                    Occupation = GetString(rs, "Occupation", 50),
+                };
+                db.FinEmployers.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_EMPLOYER records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FIN_EMPLOYER: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinSpEmployer()
+    {
+        OnProgress?.Invoke("Migrating FIN_SPEMPLOYER...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FIN_SPEMPLOYER");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinSpEmployer
+                {
+                    SpEmployerCounter = GetInt32(rs, "SpEmployerCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    EmployerName = GetString(rs, "EmployerName", 100),
+                    EmployerAddress = GetString(rs, "EmployerAddress", 150),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    HourlyRate = GetDoubleNullable(rs, "HourlyRate"),
+                    HoursPerWeek = GetDoubleNullable(rs, "HoursPerWeek"),
+                    PayFrequency = GetString(rs, "PayFrequency", 20),
+                    StartDate = GetDateTime(rs, "StartDate"),
+                    Supervisor = GetString(rs, "Supervisor", 100),
+                    SupervisorPhone = GetString(rs, "SupervisorPhone", 20),
+                    Occupation = GetString(rs, "Occupation", 50),
+                };
+                db.FinSpEmployers.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_SPEMPLOYER records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FIN_SPEMPLOYER: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinUnemployed()
+    {
+        OnProgress?.Invoke("Migrating FIN_UNEMPLOYED...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FIN_UNEMPLOYED");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinUnemployed
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    IncomeSource = ParseIncomeSource(GetString(rs, "IncomeSource")),
+                };
+                db.FinUnemployeds.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_UNEMPLOYED records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FIN_UNEMPLOYED: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinSpUnemploy()
+    {
+        OnProgress?.Invoke("Migrating FIN_SPUNEMPLOY...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FIN_SPUNEMPLOY");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinSpUnemploy
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    IncomeSource = ParseIncomeSource(GetString(rs, "IncomeSource")),
+                };
+                db.FinSpUnemploys.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_SPUNEMPLOY records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FIN_SPUNEMPLOY: {ex.Message}");
+        }
+    }
+
+    private static IncomeSourceType ParseIncomeSource(string? val)
+        => val?.ToUpperInvariant() switch
+        {
+            "A" => IncomeSourceType.A,
+            "W" => IncomeSourceType.W,
+            "AF" => IncomeSourceType.AF,
+            "SS" => IncomeSourceType.SS,
+            "RET" => IncomeSourceType.Ret,
+            "OTH" => IncomeSourceType.Oth,
+            _ => IncomeSourceType.A
+        };
+
+    private void MigrateFinAuto()
+    {
+        OnProgress?.Invoke("Migrating FINANCE_AUTO...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FINANCE_AUTO");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinAuto
+                {
+                    AutoCounter = GetInt32(rs, "AutoCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    CarYear = GetString(rs, "CarYear", 4),
+                    CarMake = GetString(rs, "CarMake", 50),
+                    CarModel = GetString(rs, "CarModel", 50),
+                    CarVin = GetString(rs, "CarVin", 20),
+                    EstimatedValue = GetDoubleNullable(rs, "EstimatedValue"),
+                    AmountOwed = GetDoubleNullable(rs, "AmountOwed"),
+                };
+                db.FinAutos.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_AUTO records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FINANCE_AUTO: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinBank()
+    {
+        OnProgress?.Invoke("Migrating FINANCE_BANK...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FINANCE_BANK");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinBank
+                {
+                    BankCounter = GetInt32(rs, "BankCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    BankName = GetString(rs, "BankName", 50),
+                    AccountNumber = GetString(rs, "AccountNumber", 20),
+                    EstimatedValue = GetDoubleNullable(rs, "EstimatedValue"),
+                    AmountOwed = GetDoubleNullable(rs, "AmountOwed"),
+                };
+                db.FinBanks.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_BANK records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FINANCE_BANK: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinHome()
+    {
+        OnProgress?.Invoke("Migrating FINANCE_HOME...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FINANCE_HOME");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinHome
+                {
+                    HomeCounter = GetInt32(rs, "HomeCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    Address = GetString(rs, "Address", 150),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    EstimatedValue = GetDoubleNullable(rs, "EstimatedValue"),
+                    AmountOwed = GetDoubleNullable(rs, "AmountOwed"),
+                    MortgageCompany = GetString(rs, "MortgageCompany", 100),
+                    MortgagePayment = GetDoubleNullable(rs, "MortgagePayment"),
+                };
+                db.FinHomes.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_HOME records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FINANCE_HOME: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinRent()
+    {
+        OnProgress?.Invoke("Migrating FINANCE_RENT...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FINANCE_RENT");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinRent
+                {
+                    RentCounter = GetInt32(rs, "RentCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    LandlordName = GetString(rs, "LandlordName", 100),
+                    MonthlyRent = GetDoubleNullable(rs, "MonthlyRent"),
+                    Address = GetString(rs, "Address", 150),
+                    City = GetString(rs, "City", 50),
+                    State = GetString(rs, "State", 2),
+                    Zip = GetString(rs, "Zip", 20),
+                    Phone = GetString(rs, "Phone", 20),
+                };
+                db.FinRents.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_RENT records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FINANCE_RENT: {ex.Message}");
+        }
+    }
+
+    private void MigrateFinOther()
+    {
+        OnProgress?.Invoke("Migrating FINANCE_OTHER...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM FINANCE_OTHER");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new FinOther
+                {
+                    OtherCounter = GetInt32(rs, "OtherCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    Description = GetString(rs, "Description", 100),
+                    EstimatedValue = GetDoubleNullable(rs, "EstimatedValue"),
+                    AmountOwed = GetDoubleNullable(rs, "AmountOwed"),
+                };
+                db.FinOthers.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_OTHER records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR FINANCE_OTHER: {ex.Message}");
+        }
+    }
+
+    private void MigrateCharge()
+    {
+        OnProgress?.Invoke("Migrating CHARGE...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM CHARGE");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Charge
+                {
+                    ChargeCounter = GetInt32(rs, "ChargeCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    CaseNumber = GetString(rs, "CaseNumber", 20),
+                    ChargeDate = GetDateTime(rs, "ChargeDate"),
+                    ChargeType = GetString(rs, "ChargeType", 20),
+                    Description = GetString(rs, "Description", 200),
+                    ChargeNumber = GetInt32Nullable(rs, "ChargeNumber"),
+                };
+                db.Charges.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} CHARGE records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR CHARGE: {ex.Message}");
+        }
+    }
+
+    private void MigrateWarrant()
+    {
+        OnProgress?.Invoke("Migrating WARRANT...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM WARRANT");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Warrant
+                {
+                    WarrantCounter = GetInt32(rs, "WarrantCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    WarrantNumber = GetString(rs, "WarrantNumber", 20),
+                    CaseNumber = GetString(rs, "CaseNumber", 20),
+                    JurisdictionCode = GetString(rs, "JurisdictionCode", 20),
+                    BondAmt = GetDoubleNullable(rs, "BondAmt"),
+                    Jail = GetBool(rs, "Jail"),
+                };
+                db.Warrants.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} WARRANT records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR WARRANT: {ex.Message}");
+        }
+    }
+
+    private void MigrateAppointment()
+    {
+        OnProgress?.Invoke("Migrating APPOINTMENT...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM APPOINTMENT");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Appointment
+                {
+                    ApptCounter = GetInt32(rs, "ApptCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    AttorneyId = GetString(rs, "AttorneyID", 10),
+                    Date = GetDateTime(rs, "Date"),
+                    Action = GetString(rs, "Action", 20),
+                    DateSigned = GetDateTime(rs, "DateSigned"),
+                    VoucherNumber = GetString(rs, "VoucherNumber", 20),
+                    GAL = GetBool(rs, "GAL"),
+                };
+                db.Appointments.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} APPOINTMENT records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR APPOINTMENT: {ex.Message}");
+        }
+    }
+
+    private void MigrateVoucher()
+    {
+        OnProgress?.Invoke("Migrating VOUCHER...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM VOUCHER");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new Voucher
+                {
+                    VoucherCounter = GetInt32(rs, "VoucherCounter"),
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    AttorneyId = GetString(rs, "AttorneyID", 10),
+                    Date = GetDateTime(rs, "Date"),
+                    Action = GetString(rs, "Action", 20),
+                    Outcome = ParseOutcome(GetString(rs, "Outcome")),
+                };
+                db.Vouchers.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} VOUCHER records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR VOUCHER: {ex.Message}");
+        }
+    }
+
+    private static Core.Entities.VoucherOutcome ParseOutcome(string? val)
+        => val?.ToUpperInvariant() switch
+        {
+            "G" => Core.Entities.VoucherOutcome.G,
+            "N" => Core.Entities.VoucherOutcome.N,
+            "W" => Core.Entities.VoucherOutcome.W,
+            "D" => Core.Entities.VoucherOutcome.D,
+            _ => Core.Entities.VoucherOutcome.G
+        };
+
+    private void MigrateEIA()
+    {
+        OnProgress?.Invoke("Migrating EIA...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset("SELECT * FROM EIA");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var e = new EIA
+                {
+                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    Type = ParseTypeEnum(GetString(rs, "Type")),
+                    ApplicationType = ParseTypeEnum(GetString(rs, "ApplicationType")),
+                };
+                db.EIAs.Add(e);
+                rs.MoveNext();
+                count++;
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} EIA records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR EIA: {ex.Message}");
+        }
+    }
+
+    private void MigrateEIAWithDefendantIds()
+    {
+        // If EIA was migrated without DefendantIds, backfill them from APPOINTMENT
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var eias = db.EIAs.Where(e => string.IsNullOrEmpty(e.DefendantId)).ToList();
+            if (eias.Count == 0) return;
+
+            foreach (var eia in eias)
+            {
+                var defId = db.Appointments
+                    .Where(a => a.ApplicationNumber == eia.ApplicationNumber)
+                    .Select(a => a.DefendantId)
+                    .FirstOrDefault();
+                if (!string.IsNullOrEmpty(defId))
+                    eia.DefendantId = defId;
+            }
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Backfilled DefendantId for {eias.Count} EIA records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  WARNING EIA backfill: {ex.Message}");
+        }
+    }
+
+    private void MigrateLookup(string sourceTable, string entityName)
+    {
+        OnProgress?.Invoke($"Migrating {sourceTable}...");
+        try
+        {
+            using var db = new PdTrackerDbContext(MakeOpts().Options);
+            var rs = _daoDb!.OpenRecordset($"SELECT * FROM [{sourceTable}]");
+            int count = 0;
+            while (!rs.EOF)
+            {
+                var id = GetString(rs, rs.Fields[0].Name, 10);
+                var desc = GetString(rs, rs.Fields[1].Name, 200);
+                if (!string.IsNullOrEmpty(id))
+                {
+                    db.AttorneyListLookups.Add(new AttorneyListLookups
+                    {
+                        TableName = sourceTable,
+                        Code = id,
+                        Description = desc ?? id,
+                    });
+                    count++;
+                }
+                rs.MoveNext();
+            }
+            rs.Close();
+            db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} {entityName} records.");
+        }
+        catch (Exception ex)
+        {
+            OnProgress?.Invoke($"  ERROR {sourceTable}: {ex.Message}");
+        }
     }
 }

@@ -4,6 +4,8 @@ public class EIA : Entity
 {
     public int ApplicationNumber { get; set; }
     public string? DefendantId { get; set; } // FK → Defendant.DefendantId, populated via ApplicationNumber lookup
+    public Type? Type { get; set; }         // 'F', 'M', 'O'
+    public Type? ApplicationType { get; set; } // alias for Type
     public string? Judge { get; set; }
     public string? EIAResult { get; set; }
     public string? Jail { get; set; }

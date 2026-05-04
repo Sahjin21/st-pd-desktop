@@ -44,3 +44,13 @@ public class Type : Entity
     public string TypeCode { get; set; } = string.Empty;
     public string? TypeDescription { get; set; }
 }
+
+/// <summary>
+/// Generic catch-all lookup table for migrated reference data.
+/// </summary>
+public class AttorneyListLookups : Entity
+{
+    public string TableName { get; set; } = string.Empty; // e.g. "CHARGE_ID", "DENIAL_CODE"
+    public string Code { get; set; } = string.Empty;
+    public string? Description { get; set; }
+}

@@ -45,6 +45,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<Judge> Judges => Set<Judge>();
     public DbSet<IncomeSource> IncomeSources => Set<IncomeSource>();
     public DbSet<Core.Entities.Type> Types => Set<Core.Entities.Type>();
+    public DbSet<AttorneyListLookups> AttorneyListLookups => Set<AttorneyListLookups>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -477,6 +478,14 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
             e.HasKey(x => x.Id);
             e.Property(x => x.Id).HasColumnName("ID");
             e.Property(x => x.ApplicationNumber).HasColumnName("ApplicationNumber");
+            e.Property(x => x.Type).HasColumnName("Type").HasMaxLength(2)
+                .HasConversion(
+                    v => v.HasValue ? v.Value.ToString() : null,
+                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Type>(v, true, out var result) ? result : null);
+            e.Property(x => x.ApplicationType).HasColumnName("ApplicationType").HasMaxLength(2)
+                .HasConversion(
+                    v => v.HasValue ? v.Value.ToString() : null,
+                    v => string.IsNullOrEmpty(v) ? null : Enum.TryParse<Type>(v, true, out var result) ? result : null);
             e.Property(x => x.Judge).HasColumnName("Judge").HasMaxLength(50);
             e.Property(x => x.EIAResult).HasColumnName("EIAResult").HasMaxLength(50);
             e.Property(x => x.Jail).HasColumnName("jail").HasMaxLength(50);
@@ -547,6 +556,15 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
             e.HasKey(x => x.TypeCode);
             e.Property(x => x.TypeCode).HasColumnName("TYPE").HasMaxLength(2);
             e.Property(x => x.TypeDescription).HasColumnName("TYPEDES").HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<AttorneyListLookups>(e =>
+        {
+            e.ToTable("ATTORNEY_LIST_LOOKUPS");
+            e.HasKey(x => x.Id); // use inherited Guid Id
+            e.Property(x => x.TableName).HasMaxLength(50);
+            e.Property(x => x.Code).HasMaxLength(50);
+            e.Property(x => x.Description).HasMaxLength(255);
         });
     }
 }
