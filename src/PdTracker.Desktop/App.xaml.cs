@@ -138,6 +138,13 @@ public partial class App : Application
         services.AddTransient<VoucherSearchViewModel>();
         services.AddTransient<DefendantAZView>();
 
+        // Register all Views (transient, each navigation gets a fresh instance)
+        services.AddTransient<DefendantSearchView>();
+        services.AddTransient<NewApplicationView>();
+        services.AddTransient<AttorneyListView>();
+        services.AddTransient<VoucherSearchView>();
+        services.AddTransient<DefendantAZView>();
+
         Services = services.BuildServiceProvider();
     }
 

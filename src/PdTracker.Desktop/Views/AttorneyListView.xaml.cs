@@ -1,16 +1,18 @@
 using System.Windows.Controls;
-using Microsoft.Extensions.DependencyInjection;
 using PdTracker.Desktop.ViewModels;
 
 namespace PdTracker.Desktop.Views;
 
 public partial class AttorneyListView : UserControl
 {
-    public AttorneyListView()
+    public AttorneyListView(AttorneyListViewModel vm)
     {
         InitializeComponent();
-        var vm = App.Services.GetService(typeof(AttorneyListViewModel)) as AttorneyListViewModel;
         DataContext = vm;
-        Loaded += async (_, _) => await vm!.LoadAllAsync();
+        Loaded += async (_, _) =>
+        {
+            try { await vm.LoadAllAsync(); }
+            catch { }
+        };
     }
 }

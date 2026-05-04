@@ -1,14 +1,13 @@
 using System.Windows.Controls;
-using Microsoft.Extensions.DependencyInjection;
 using PdTracker.Desktop.ViewModels;
 
 namespace PdTracker.Desktop.Views;
 
 public partial class DefendantSearchView : UserControl
 {
-    public DefendantSearchView()
+    public DefendantSearchView(DefendantSearchViewModel vm)
     {
         InitializeComponent();
-        DataContext = App.Services.GetService(typeof(DefendantSearchViewModel));
+        DataContext = vm;
     }
 }
