@@ -388,7 +388,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithMany(d => d.Charges)
-                .HasForeignKey(x => x.ApplicationNumber);
+                .HasForeignKey(x => x.ApplicationNumber).HasPrincipalKey(x => x.ApplicationNumber);
         });
 
         modelBuilder.Entity<Warrant>(e =>
@@ -409,7 +409,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithMany(d => d.Warrants)
-                .HasForeignKey(x => x.ApplicationNumber);
+                .HasForeignKey(x => x.ApplicationNumber).HasPrincipalKey(x => x.ApplicationNumber);
         });
 
         modelBuilder.Entity<Appointment>(e =>
@@ -434,7 +434,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithMany(d => d.Appointments)
-                .HasForeignKey(x => x.ApplicationNumber);
+                .HasForeignKey(x => x.ApplicationNumber).HasPrincipalKey(x => x.ApplicationNumber);
 
             e.HasOne(x => x.Attorney)
                 .WithMany(a => a.Appointments)
@@ -463,7 +463,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithMany(d => d.Vouchers)
-                .HasForeignKey(x => x.ApplicationNumber);
+                .HasForeignKey(x => x.ApplicationNumber).HasPrincipalKey(x => x.ApplicationNumber);
 
             e.HasOne(x => x.Attorney)
                 .WithMany(a => a.Vouchers)
@@ -485,7 +485,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithOne(d => d.EIA)
-                .HasForeignKey<EIA>(x => x.ApplicationNumber);
+                .HasForeignKey<EIA>(x => x.ApplicationNumber).HasPrincipalKey(x => x.ApplicationNumber);
         });
 
         // Lookups
