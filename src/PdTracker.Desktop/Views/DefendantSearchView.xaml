@@ -10,21 +10,49 @@
 
         <!-- Search Bar -->
         <Border Grid.Row="0" Margin="0,0,0,16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox Grid.Column="0" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                         FontSize="14" Padding="10,8" Margin="0,0,8,0"
-                         VerticalContentAlignment="Center">
-                    <TextBox.InputBindings>
-                        <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
-                    </TextBox.InputBindings>
-                </TextBox>
-                <Button Grid.Column="1" Content="Search" Command="{Binding SearchCommand}"
-                        Padding="24,8" FontSize="14" Cursor="Hand"/>
-            </Grid>
+            <StackPanel>
+                <!-- First + Last Name row -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Last Name" FontSize="11" Foreground="Gray" Margin="4,0,0,2"/>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding LastNameSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="14" Padding="10,8"
+                                 VerticalContentAlignment="Center">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="First Name" FontSize="11" Foreground="Gray" Margin="4,0,0,2"/>
+                        <TextBox Grid.Column="2"
+                                 Text="{Binding FirstNameSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="14" Padding="10,8"
+                                 VerticalContentAlignment="Center">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </StackPanel>
+
+                    <Button Grid.Column="4" Content="Search" Command="{Binding SearchCommand}"
+                            Padding="28,8" FontSize="14" Cursor="Hand" VerticalAlignment="Bottom" Margin="0,0,0,0"/>
+                </Grid>
+
+                <!-- Hint -->
+                <TextBlock Text="Enter a last name, first name, or both to search. Press Enter or click Search."
+                           FontSize="11" Foreground="Gray" Margin="4,0,0,0"/>
+            </StackPanel>
         </Border>
 
         <!-- Results + Tabs -->

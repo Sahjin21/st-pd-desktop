@@ -11,7 +11,8 @@ public partial class DefendantSearchViewModel : ObservableObject
 {
     private readonly IDbContextFactory<PdTrackerDbContext> _dbFactory;
 
-    [ObservableProperty] string _searchText = string.Empty;
+    [ObservableProperty] string _lastNameSearch = string.Empty;
+    [ObservableProperty] string _firstNameSearch = string.Empty;
     [ObservableProperty] Defendant? _selectedDefendant;
     [ObservableProperty] int _selectedTabIndex;
 
@@ -35,35 +36,30 @@ public partial class DefendantSearchViewModel : ObservableObject
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(SearchText)) return;
-
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var term = SearchText.Trim();
+            var ln = LastNameSearch.Trim();
+            var fn = FirstNameSearch.Trim();
 
-            // Try as number first (ApplicationNumber), then as string (DefendantID/SOID/Name)
-            if (int.TryParse(term, out var appNum))
-            {
-                Results.Clear();
-                var found = await db.Defendants
-                    .Include(d => d.Qualify)
-                    .FirstOrDefaultAsync(d => d.ApplicationNumber == appNum);
-                if (found != null) Results.Add(found);
-            }
-            else
-            {
-                var pattern = $"%{term}%";
-                var list = await db.Defendants
-                    .Include(d => d.Qualify)
-                    .Where(d => EF.Functions.Like(d.LastName, pattern)
-                             || EF.Functions.Like(d.FirstName, pattern)
-                             || EF.Functions.Like(d.DefendantId, pattern)
-                             || (d.SOID != null && EF.Functions.Like(d.SOID, pattern)))
-                    .Take(50)
-                    .ToListAsync();
+            // Load all — data is small enough; filter client-side for reliability
+            var all = await db.Defendants
+                .Include(d => d.Qualify)
+                .Take(500)
+                .ToListAsync();
 
-                Results.Clear();
-                foreach (var d in list) Results.Add(d);
-            }
+            var query = all.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(ln))
+                query = query.Where(d =>
+                    d.LastName != null &&
+                    d.LastName.Contains(ln, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(fn))
+                query = query.Where(d =>
+                    d.FirstName != null &&
+                    d.FirstName.Contains(fn, StringComparison.OrdinalIgnoreCase));
+
+            Results.Clear();
+            foreach (var d in query.Take(50)) Results.Add(d);
         }
         catch (Exception ex)
         {
