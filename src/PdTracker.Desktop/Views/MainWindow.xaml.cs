@@ -16,22 +16,16 @@ public partial class MainWindow : Window
 
     private void OnNavigationRequested(object? sender, string viewName)
     {
-        if (ContentArea == null) return; // Safety guard
-        ContentArea.Content = null;
-        object? vm = viewName switch
+        if (ContentArea == null) return;
+        ContentArea.Content = viewName switch
         {
-            "SearchDefendant" => App.Services.GetService(typeof(DefendantSearchViewModel)),
-            "NewApplication" => App.Services.GetService(typeof(NewApplicationViewModel)),
-            "EditAttorney" => App.Services.GetService(typeof(AttorneyListViewModel)),
-            "AddAttorney" => App.Services.GetService(typeof(AttorneyListViewModel)),
-            "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchViewModel)),
-            "DefendantAZ" => new Views.DefendantAZView(),
+            "SearchDefendant" => App.Services.GetService(typeof(DefendantSearchView)),
+            "NewApplication" => App.Services.GetService(typeof(NewApplicationView)),
+            "EditAttorney" => App.Services.GetService(typeof(AttorneyListView)),
+            "AddAttorney" => App.Services.GetService(typeof(AttorneyListView)),
+            "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchView)),
+            "DefendantAZ" => App.Services.GetService(typeof(DefendantAZView)),
             _ => null
         };
-
-        if (vm is FrameworkElement fe)
-        {
-            ContentArea.Content = fe;
-        }
     }
 }
