@@ -15,7 +15,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.11" />
     <PackageReference Include="System.Data.OleDb" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Office.Interop.Access.Dao" Version="16.0.0" />
+    <PackageReference Include="Microsoft.Office.Interop.Access.Dao" Version="15.0.4420.1018" />
   </ItemGroup>
 
   <ItemGroup>
