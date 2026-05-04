@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using PdTracker.Core.Entities;
 using PdTracker.Data.DbContext;
 
@@ -34,35 +33,42 @@ public partial class DefendantSearchViewModel : ObservableObject
     [RelayCommand]
     async Task SearchAsync()
     {
-        if (string.IsNullOrWhiteSpace(SearchText)) return;
-
-        await using var db = await _dbFactory.CreateDbContextAsync();
-        var term = SearchText.Trim();
-
-        var query = db.Defendants
-            .Include(d => d.Qualify)
-            .AsQueryable();
-
-        // Try as number first (ApplicationNumber), then as string (DefendantID/SOID/Name)
-        if (int.TryParse(term, out var appNum))
+        try
         {
-            Results.Clear();
-            var found = await query.FirstOrDefaultAsync(d => d.ApplicationNumber == appNum);
-            if (found != null) Results.Add(found);
+            if (string.IsNullOrWhiteSpace(SearchText)) return;
+
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var term = SearchText.Trim();
+
+            // Try as number first (ApplicationNumber), then as string (DefendantID/SOID/Name)
+            if (int.TryParse(term, out var appNum))
+            {
+                Results.Clear();
+                var found = await db.Defendants
+                    .Include(d => d.Qualify)
+                    .FirstOrDefaultAsync(d => d.ApplicationNumber == appNum);
+                if (found != null) Results.Add(found);
+            }
+            else
+            {
+                var pattern = $"%{term}%";
+                var list = await db.Defendants
+                    .Include(d => d.Qualify)
+                    .Where(d => EF.Functions.Like(d.LastName, pattern)
+                             || EF.Functions.Like(d.FirstName, pattern)
+                             || EF.Functions.Like(d.DefendantId, pattern)
+                             || (d.SOID != null && EF.Functions.Like(d.SOID, pattern)))
+                    .Take(50)
+                    .ToListAsync();
+
+                Results.Clear();
+                foreach (var d in list) Results.Add(d);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            var lower = term.ToLower();
-            var list = await query
-                .Where(d => d.LastName.ToLower().Contains(lower)
-                         || d.FirstName.ToLower().Contains(lower)
-                         || d.DefendantId.Contains(term)
-                         || (d.SOID != null && d.SOID.Contains(term)))
-                .Take(50)
-                .ToListAsync();
-
-            Results.Clear();
-            foreach (var d in list) Results.Add(d);
+            System.Windows.MessageBox.Show($"Search error:\n{ex.Message}", "Error",
+                System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
         }
     }
 
