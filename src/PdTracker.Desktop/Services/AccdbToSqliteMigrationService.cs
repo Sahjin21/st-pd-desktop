@@ -984,13 +984,19 @@ public class AccdbToSqliteMigrationService
             {
                 var e = new Voucher
                 {
-                    VoucherCounter = GetInt32(rs, "VoucherCounter"),
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
-                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
-                    AttorneyId = GetString(rs, "AttorneyID", 10),
-                    Date = GetDateTime(rs, "Date"),
-                    Action = GetString(rs, "Action", 20),
+                    VoucherNumber = GetString(rs, "VoucherNumber", 20) ?? "",
+                    VoucherLetter = GetString(rs, "VoucherLetter", 5),
+                    ApplicationNumber = GetInt32Nullable(rs, "ApplicationNumber"),
+                    AttyCode = GetString(rs, "AttyCode", 10),
+                    DateVchrPaid = GetDateTime(rs, "DateVchrPaid"),
+                    DateCaseCompleted = GetDateTime(rs, "DateCaseCompleted"),
+                    InCourtHours = (decimal?)GetDoubleNullable(rs, "InCourtHours"),
+                    OutCourtHours = (decimal?)GetDoubleNullable(rs, "OutCourtHours"),
+                    CourtOrderedReimburse = (decimal?)GetDoubleNullable(rs, "CourtOrderedReimburse"),
+                    TotalVoucherAmt = (decimal?)GetDoubleNullable(rs, "TotalVoucherAmt"),
+                    TotalAmountPaid = (decimal?)GetDoubleNullable(rs, "TotalAmountPaid"),
                     Outcome = ParseOutcome(GetString(rs, "Outcome")),
+                    OutcomeOther = GetString(rs, "OutcomeOther", 255),
                 };
                 db.Vouchers.Add(e);
                 rs.MoveNext();
@@ -1013,7 +1019,8 @@ public class AccdbToSqliteMigrationService
             "N" => Core.Entities.VoucherOutcome.N,
             "W" => Core.Entities.VoucherOutcome.W,
             "D" => Core.Entities.VoucherOutcome.D,
-            _ => Core.Entities.VoucherOutcome.G
+            "O" => Core.Entities.VoucherOutcome.O,
+            _ => Core.Entities.VoucherOutcome.O
         };
 
     private void MigrateEIA()
@@ -1049,7 +1056,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateEIAWithDefendantIds()
     {
-        // If EIA was migrated without DefendantIds, backfill them from APPOINTMENT
+        // If EIA was migrated without DefendantIds, backfill them from DEFENDANT
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts().Options);
@@ -1058,9 +1065,9 @@ public class AccdbToSqliteMigrationService
 
             foreach (var eia in eias)
             {
-                var defId = db.Appointments
-                    .Where(a => a.ApplicationNumber == eia.ApplicationNumber)
-                    .Select(a => a.DefendantId)
+                var defId = db.Defendants
+                    .Where(d => d.ApplicationNumber == eia.ApplicationNumber)
+                    .Select(d => d.DefendantId)
                     .FirstOrDefault();
                 if (!string.IsNullOrEmpty(defId))
                     eia.DefendantId = defId;

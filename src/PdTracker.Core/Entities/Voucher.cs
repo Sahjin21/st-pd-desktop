@@ -1,6 +1,6 @@
 namespace PdTracker.Core.Entities;
 
-public enum VoucherOutcome { Guilty, NotGuilty, Plea, Nollepros, DeadDocket, Dismissed, Other }
+public enum VoucherOutcome { G, N, W, D, O }
 
 public class Voucher : Entity
 {
