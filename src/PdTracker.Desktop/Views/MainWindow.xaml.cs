@@ -41,4 +41,13 @@ public partial class MainWindow : Window
             };
         }
     }
+
+    private void About_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show(
+            "PD Tracker v1.0\nGeorgia State Public Defender's Office\n\nMigrated from legacy Microsoft Access.",
+            "About PD Tracker",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
 }

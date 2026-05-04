@@ -36,52 +36,68 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <DockPanel>
+        <!-- Menu Bar -->
+        <Menu DockPanel.Dock="Top" Background="#1A3A5C" Foreground="White" Padding="4,2">
+            <MenuItem Header="_File" Foreground="White">
+                <MenuItem Header="Change _Database Location..."
+                          Command="{Binding ChangeDatabaseCommand}"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Command="{Binding ExitCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Help" Foreground="White">
+                <MenuItem Header="_About PD Tracker" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
 
-        <!-- Left Navigation Panel -->
-        <Border Grid.Column="0" Background="#1A3A5C">
-            <StackPanel Margin="10,20">
-                <TextBlock Text="PD Tracker"
-                           FontSize="20" FontWeight="Bold"
-                           Foreground="White" Margin="10,0,0,24"/>
+        <!-- Main Layout: Nav + Content -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
 
-                <Button Content="Search Defendant" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="SearchDefendant"/>
-                <Button Content="New Application" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="NewApplication"/>
-                <Button Content="Edit Attorney List" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="EditAttorney"/>
-                <Button Content="Add Attorney" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="AddAttorney"/>
-                <Button Content="Search Voucher" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="SearchVoucher"/>
-                <Button Content="Defendant A-Z" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="DefendantAZ"/>
-                <Button Content="Reports" Style="{StaticResource MenuButton}"
-                        Command="{Binding NavigateCommand}"
-                        CommandParameter="Reports"/>
+            <!-- Left Navigation Panel -->
+            <Border Grid.Column="0" Background="#1A3A5C">
+                <StackPanel Margin="10,20">
+                    <TextBlock Text="PD Tracker"
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="White" Margin="10,0,0,24"/>
 
-                <Separator Margin="0,20" Background="#3A5A7A"/>
+                    <Button Content="Search Defendant" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="SearchDefendant"/>
+                    <Button Content="New Application" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="NewApplication"/>
+                    <Button Content="Edit Attorney List" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="EditAttorney"/>
+                    <Button Content="Add Attorney" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="AddAttorney"/>
+                    <Button Content="Search Voucher" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="SearchVoucher"/>
+                    <Button Content="Defendant A-Z" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="DefendantAZ"/>
+                    <Button Content="Reports" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="Reports"/>
 
-                <Button Content="Exit" Style="{StaticResource MenuButton}"
-                        Background="#8B2020"
-                        Command="{Binding ExitCommand}"/>
-            </StackPanel>
-        </Border>
+                    <Separator Margin="0,20" Background="#3A5A7A"/>
 
-        <!-- Main Content Area -->
-        <Border Grid.Column="1" Padding="20">
-            <ContentControl x:Name="ContentArea"/>
-        </Border>
-    </Grid>
+                    <Button Content="Exit" Style="{StaticResource MenuButton}"
+                            Background="#8B2020"
+                            Command="{Binding ExitCommand}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Main Content Area -->
+            <Border Grid.Column="1" Padding="20">
+                <ContentControl x:Name="ContentArea"/>
+            </Border>
+        </Grid>
+    </DockPanel>
 </Window>

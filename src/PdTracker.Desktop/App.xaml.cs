@@ -15,10 +15,15 @@ public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
 
-    private static readonly string SettingsPath =
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "PdTracker", "settings.json");
+    /// <summary>
+    /// The currently active SQLite database path.
+    /// </summary>
+    public static string CurrentSqlitePath { get; private set; } = null!;
+
+    private static readonly string SettingsDir =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PdTracker");
+
+    private static readonly string SettingsPath = Path.Combine(SettingsDir, "settings.json");
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -40,105 +45,66 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // Load settings
-        var settings = LoadSettings();
-        string sqlitePath = settings.SqlitePath ?? "";
-        string accdbPath = settings.AccdbPath ?? "";
-
-        // Derive what the sqlite path *should* be for the stored accdb source
-        string expectedSqlitePath = !string.IsNullOrEmpty(accdbPath)
-            ? Path.ChangeExtension(accdbPath, ".sqlite") ?? ""
-            : sqlitePath;
-
-        // If sqlite file doesn't exist, OR accdb source changed since last run, need to re-set up
-        bool sqliteIsStale = false;
-        if (!File.Exists(sqlitePath))
+        // Check for --db argument (passed when restarting after DB change)
+        string? overrideDb = null;
+        for (int i = 0; i < e.Args.Length - 1; i++)
         {
-            // sqlite gone/missing — need to pick a source
-            sqliteIsStale = true;
-        }
-        else if (!string.IsNullOrEmpty(accdbPath) && File.Exists(accdbPath))
-        {
-            // sqlite exists — check if it was built from a different accdb than stored
-            if (!string.Equals(sqlitePath, expectedSqlitePath, StringComparison.OrdinalIgnoreCase))
-                sqliteIsStale = true;
-        }
-        else if (!string.IsNullOrEmpty(sqlitePath) && string.IsNullOrEmpty(accdbPath))
-        {
-            // Sqlite stored but no accdb source recorded — might be stale
-            sqliteIsStale = true;
-        }
-
-        if (sqliteIsStale)
-        {
-            // Show picker — user picks .accdb (to migrate) or .sqlite (existing db)
-            var picker = new Microsoft.Win32.OpenFileDialog
+            if (e.Args[i] == "--db")
             {
-                Title = "Select PD Tracker Database — pick the .accdb to migrate, or an existing .sqlite file",
-                Filter =
-                    "Access Database (*.accdb;*.mdb)|*.accdb;*.mdb|" +
-                    "SQLite Database (*.sqlite;*.sqlite3)|*.sqlite;*.sqlite3|" +
-                    "All Files (*.*)|*.*",
-            };
-
-            if (picker.ShowDialog() != true)
-            {
-                Current.Shutdown();
-                return;
+                overrideDb = e.Args[i + 1];
+                break;
             }
+        }
 
-            var pickedPath = picker.FileName;
-            var ext = Path.GetExtension(pickedPath).ToLowerInvariant();
+        // Load settings or detect portable mode
+        string sqlitePath;
+        string accdbPath;
 
-            if (ext == ".accdb" || ext == ".mdb")
+        if (!string.IsNullOrEmpty(overrideDb))
+        {
+            // Restarted with new db — overrideDb is the sqlite filename, find it relative to exe
+            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            sqlitePath = Path.Combine(exeDir, overrideDb);
+            accdbPath = "";
+        }
+        else if (File.Exists(SettingsPath))
+        {
+            var settings = LoadSettings();
+            sqlitePath = settings.SqlitePath ?? "";
+            accdbPath = settings.AccdbPath ?? "";
+        }
+        else
+        {
+            // Portable mode: check for .sqlite next to the .exe
+            var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+            var portableSqlite = DetectPortableSqlite(exeDir);
+
+            if (portableSqlite != null)
             {
-                // Migrate from Access — always produce a .sqlite in the same folder
-                accdbPath = pickedPath;
-                sqlitePath = Path.ChangeExtension(pickedPath, ".sqlite") ?? pickedPath;
-
-                // User picked an accdb — delete any existing sqlite at the target
-                // so we do a clean migration without duplicate-key conflicts
-                if (File.Exists(sqlitePath))
-                    File.Delete(sqlitePath);
-
-                var migrateWindow = new MigrationWindow();
-                migrateWindow.Show();
-
-                var migrator = new AccdbToSqliteMigrationService(accdbPath, sqlitePath);
-                migrator.OnProgress += msg => migrateWindow.AppendLog(msg);
-
-                try
-                {
-                    migrator.Run();
-                    migrateWindow.AppendLog("Done! You can now delete your old .accdb file.");
-                    migrateWindow.Done();
-                }
-                catch (Exception ex)
-                {
-                    migrateWindow.AppendLog($"ERROR: {ex.Message}");
-                    ShowError("Migration Failed", ex);
-                    migrateWindow.Close();
-                    Current.Shutdown();
-                    return;
-                }
+                sqlitePath = portableSqlite;
+                accdbPath = "";
             }
             else
             {
-                // Picked a sqlite file directly — use it as-is
-                sqlitePath = pickedPath;
-                accdbPath = ""; // don't know the source
+                // No settings, no portable sqlite — show file picker
+                var picked = ShowFilePicker();
+                if (picked == null) { Shutdown(); return; }
+                sqlitePath = picked.SqlitePath;
+                accdbPath = picked.AccdbPath;
             }
         }
 
-        // Persist
-        settings.SqlitePath = sqlitePath;
-        settings.AccdbPath = accdbPath;
-        SaveSettings(settings);
+        // Validate / migrate if needed
+        var result = EnsureDatabase(sqlitePath, accdbPath);
+        if (result == null) { Shutdown(); return; }
+        sqlitePath = result.Value.sqlitePath;
+        accdbPath = result.Value.accdbPath;
 
-        // Configure EF Core + DI
+        CurrentSqlitePath = sqlitePath;
+        SaveSettings(sqlitePath, accdbPath);
         ConfigureServices(sqlitePath);
 
-        // Validate
+        // Validate connection
         try
         {
             using var scope = Services.CreateScope();
@@ -151,12 +117,124 @@ public partial class App : Application
         {
             ShowError("Database Error",
                 new Exception($"Could not open '{sqlitePath}'.\n\n{ex.Message}", ex));
-            Current.Shutdown();
+            Shutdown();
             return;
         }
 
         var mainWindow = new MainWindow();
         mainWindow.Show();
+    }
+
+    /// <summary>
+    /// Detects a .sqlite file sitting next to the running .exe (portable mode).
+    /// Returns the full path, or null if none found.
+    /// </summary>
+    private static string? DetectPortableSqlite(string exeDir)
+    {
+        try
+        {
+            return Directory.GetFiles(exeDir, "*.sqlite")
+                .OrderByDescending(f => File.GetLastWriteTime(f))
+                .FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Shows the file picker. Returns null if user cancelled.
+    /// </summary>
+    private static (string sqlitePath, string accdbPath)? ShowFilePicker()
+    {
+        var picker = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Select PD Tracker Database — pick the .accdb to migrate, or an existing .sqlite file",
+            Filter =
+                "Access Database (*.accdb;*.mdb)|*.accdb;*.mdb|" +
+                "SQLite Database (*.sqlite;*.sqlite3)|*.sqlite;*.sqlite3|" +
+                "All Files (*.*)|*.*",
+        };
+
+        if (picker.ShowDialog() != true) return null;
+
+        var pickedPath = picker.FileName;
+        var ext = Path.GetExtension(pickedPath).ToLowerInvariant();
+
+        if (ext == ".accdb" || ext == ".mdb")
+        {
+            var sqlitePath = Path.ChangeExtension(pickedPath, ".sqlite") ?? pickedPath;
+            if (File.Exists(sqlitePath)) File.Delete(sqlitePath);
+
+            var migrateWindow = new MigrationWindow();
+            migrateWindow.Show();
+
+            var migrator = new AccdbToSqliteMigrationService(pickedPath, sqlitePath);
+            migrator.OnProgress += msg => migrateWindow.AppendLog(msg);
+
+            try
+            {
+                migrator.Run();
+                migrateWindow.AppendLog("Done! You can now delete your old .accdb file.");
+                migrateWindow.Done();
+            }
+            catch (Exception ex)
+            {
+                migrateWindow.AppendLog($"ERROR: {ex.Message}");
+                ShowError("Migration Failed", ex);
+                migrateWindow.Close();
+                return null;
+            }
+
+            return (sqlitePath, pickedPath);
+        }
+        else
+        {
+            return (pickedPath, "");
+        }
+    }
+
+    /// <summary>
+    /// Returns (sqlitePath, accdbPath) after ensuring the sqlite is valid.
+    /// Handles missing files and stale sqlite.
+    /// </summary>
+    private static (string sqlitePath, string accdbPath)? EnsureDatabase(string sqlitePath, string accdbPath)
+    {
+        bool needPicker = false;
+
+        if (string.IsNullOrEmpty(sqlitePath) || !File.Exists(sqlitePath))
+        {
+            needPicker = true;
+        }
+        else if (!string.IsNullOrEmpty(accdbPath) && File.Exists(accdbPath))
+        {
+            // Sqlite exists but accdb is newer/different — check if sqlite matches accdb
+            var expectedSqlite = Path.ChangeExtension(accdbPath, ".sqlite")
+                ?? accdbPath + ".sqlite";
+            if (!string.Equals(sqlitePath, expectedSqlite, StringComparison.OrdinalIgnoreCase))
+                needPicker = true;
+        }
+        else if (!string.IsNullOrEmpty(sqlitePath) && string.IsNullOrEmpty(accdbPath))
+        {
+            // Sqlite exists with no accdb — verify it has data
+            try
+            {
+                using var testDb = new PdTrackerDbContext(
+                    new DbContextOptionsBuilder<PdTrackerDbContext>()
+                        .UseSqlite($"Data Source={sqlitePath}").Options);
+                if (!testDb.Database.CanConnect())
+                    needPicker = true;
+            }
+            catch { needPicker = true; }
+        }
+
+        if (needPicker)
+        {
+            var result = ShowFilePicker();
+            if (result == null) return null;
+            sqlitePath = result.Value.sqlitePath;
+            accdbPath = result.Value.accdbPath;
+        }
+
+        return (sqlitePath, accdbPath);
     }
 
     private static void ConfigureServices(string sqlitePath)
@@ -174,7 +252,6 @@ public partial class App : Application
         services.AddTransient<VoucherSearchViewModel>();
         services.AddTransient<DefendantAZView>();
 
-        // Register all Views (transient, each navigation gets a fresh instance)
         services.AddTransient<DefendantSearchView>();
         services.AddTransient<NewApplicationView>();
         services.AddTransient<AttorneyListView>();
@@ -198,13 +275,17 @@ public partial class App : Application
         return new AppSettings();
     }
 
-    private static void SaveSettings(AppSettings settings)
+    private static void SaveSettings(string sqlitePath, string accdbPath)
     {
         try
         {
-            var dir = Path.GetDirectoryName(SettingsPath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
+            if (!Directory.Exists(SettingsDir))
+                Directory.CreateDirectory(SettingsDir);
+            var settings = new AppSettings
+            {
+                SqlitePath = sqlitePath,
+                AccdbPath = accdbPath
+            };
             var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(SettingsPath, json);
         }
