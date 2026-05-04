@@ -1,7 +1,5 @@
 using System.Data;
 using System.Data.OleDb;
-using System.Globalization;
-using Microsoft.EntityFrameworkCore;
 using PdTracker.Core.Entities;
 using PdTracker.Data.DbContext;
 
@@ -14,7 +12,6 @@ public class AccdbToSqliteMigrationService
     private OleDbConnection? _accdbConn;
 
     public event Action<string>? OnProgress;
-    public event Action<int>? OnPercentComplete;
 
     public AccdbToSqliteMigrationService(string accdbPath, string sqlitePath)
     {
@@ -22,10 +19,6 @@ public class AccdbToSqliteMigrationService
         _sqlitePath = sqlitePath;
     }
 
-    /// <summary>
-    /// Opens the accdb file. Throws if the Access driver is not installed
-    /// or the file is not accessible.
-    /// </summary>
     public void TestAccessConnection()
     {
         var connString = BuildAceConnectionString(_accdbPath);
@@ -38,10 +31,8 @@ public class AccdbToSqliteMigrationService
         if (_accdbConn == null || _accdbConn.State != ConnectionState.Open)
             TestAccessConnection();
 
-        // Create the SQLite file and seed schema via EF migrations
         CreateSqliteDatabase();
 
-        // Migrate data table by table
         MigrateTable("DEFENDANT", MigrateDefendant);
         MigrateTable("ATTORNEY_LIST", MigrateAttorneyList);
         MigrateTable("QUALIFY", MigrateQualify);
@@ -79,16 +70,11 @@ public class AccdbToSqliteMigrationService
     {
         OnProgress?.Invoke("Creating SQLite database...");
 
-        var dbPath = _sqlitePath;
-        var dir = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-            Directory.CreateDirectory(dir);
-
         var optionsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optionsBuilder.UseSqlite($"Data Source={dbPath}");
+        optionsBuilder.UseSqlite($"Data Source={_sqlitePath}");
 
         using var db = new PdTrackerDbContext(optionsBuilder.Options);
-        db.Database.EnsureCreated(); // Creates all tables from EF model
+        db.Database.EnsureCreated();
     }
 
     private void MigrateTable(string tableName, Action<OleDbDataReader> migrateFn)
@@ -107,12 +93,16 @@ public class AccdbToSqliteMigrationService
         }
     }
 
-    private void MigrateDefendant(OleDbDataReader r)
+    private static DbContextOptionsBuilder<PdTrackerDbContext> MakeOpts(string dbPath)
     {
         var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
+        optsBuilder.UseSqlite($"Data Source={dbPath}");
+        return optsBuilder;
+    }
 
+    private void MigrateDefendant(OleDbDataReader r)
+    {
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Defendant
@@ -129,7 +119,7 @@ public class AccdbToSqliteMigrationService
                 Sex = GetString(r, "Sex", 255),
                 Reference1 = GetString(r, "Reference1", 75),
                 Reference2 = GetString(r, "Reference2", 75),
-                Dependants = GetInt32(r, "dependants"),
+                Dependants = GetInt32Nullable(r, "dependants"),
                 DepDescription = GetString(r, "dep_description", 25),
                 DepOther = GetString(r, "dep_other", 20),
                 DateAdded = GetDateTime(r, "DateAdded"),
@@ -141,10 +131,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateAttorneyList(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new AttorneyList
@@ -167,7 +154,7 @@ public class AccdbToSqliteMigrationService
                 OtherNumber = GetString(r, "OtherNumber", 20),
                 PhoneType = GetString(r, "PhoneType", 20),
                 Date = GetDateTime(r, "Date"),
-                Status = GetString(r, "Status", 20),
+                Status = GetEnum<AttorneyStatus>(r, "Status"),
                 DeathPenalty = GetBool(r, "Deathpenalty"),
                 Murder = GetBool(r, "Murder"),
                 Felony = GetBool(r, "Felony"),
@@ -185,10 +172,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateQualify(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Qualify
@@ -209,21 +193,17 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDefAddress(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new DefAddress
             {
-                Id = GetInt32(r, "AddressCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
                 Street = GetString(r, "Street", 100),
                 City = GetString(r, "City", 50),
                 State = GetString(r, "State", 2),
                 ZipCode = GetString(r, "ZipCode", 10),
-                AddressFlag = GetString(r, "AddressFlag", 1),
+                AddressFlag = GetEnum<AddressFlag>(r, "AddressFlag"),
             };
             db.DefAddresses.Add(e);
         }
@@ -232,15 +212,11 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDefPhone(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new DefPhone
             {
-                Id = GetInt32(r, "PhoneCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
                 PhoneNumber = GetString(r, "PhoneNumber", 20),
                 PhoneType = GetString(r, "PhoneType", 20),
@@ -252,21 +228,17 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDefSpouse(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new DefSpouse
             {
-                Id = GetInt32(r, "SpouseCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
                 FirstName = GetString(r, "FirstName", 50),
                 MiddleName = GetString(r, "MiddleName", 50),
                 LastName = GetString(r, "LastName", 50),
                 Employed = GetBool(r, "Employed"),
-                SpouseCounter = GetString(r, "Relationship", 20),
+                SpouseCounter = GetInt32Nullable(r, "SpouseCounter"),
             };
             db.DefSpouses.Add(e);
         }
@@ -275,15 +247,11 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDefAlias(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new DefAlias
             {
-                Id = GetInt32(r, "AliasCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
                 FirstName = GetString(r, "FirstName", 50),
                 MiddleName = GetString(r, "MiddleName", 50),
@@ -296,15 +264,11 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDependent(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Dependent
             {
-                Id = GetInt32(r, "DependentCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
                 FirstName = GetString(r, "FirstName", 50),
                 MiddleName = GetString(r, "MiddleName", 50),
@@ -317,16 +281,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinEmployer(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinEmployer
             {
-                Id = GetInt32(r, "EmployerCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                EmployerCounter = GetInt32Nullable(r, "EmployerCounter"),
                 EmployerName = GetString(r, "EmployerName", 100),
                 City = GetString(r, "City", 50),
                 Phone = GetString(r, "Phone", 20),
@@ -342,16 +303,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinSpEmployer(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinSpEmployer
             {
-                Id = GetInt32(r, "SpemployCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                SpEmployerCounter = GetInt32Nullable(r, "SpemployCounter"),
                 EmployerName = GetString(r, "EmployerName", 100),
                 City = GetString(r, "City", 50),
                 Phone = GetString(r, "Phone", 20),
@@ -365,21 +323,18 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinUnemployed(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinUnemployed
             {
-                Id = GetInt32(r, "UnemployCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
-                IncomeSource = GetString(r, "IncomeSource", 20),
+                UnemployCounter = GetInt32Nullable(r, "UnemployCounter"),
+                IncomeSource = GetEnum<IncomeSourceType>(r, "IncomeSource"),
                 Description = GetString(r, "Description", 255),
+                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
                 PayPeriod = GetString(r, "PayPeriod", 20),
                 PayAmt = GetDecimal(r, "PayAmt"),
-                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
             };
             db.FinUnemployeds.Add(e);
         }
@@ -388,21 +343,18 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinSpUnemploy(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinSpUnemploy
             {
-                Id = GetInt32(r, "SpunemployCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
-                IncomeSource = GetString(r, "IncomeSource", 20),
+                SpUnemployCounter = GetInt32Nullable(r, "SpunemployCounter"),
+                IncomeSource = GetEnum<IncomeSourceType>(r, "IncomeSource"),
                 Description = GetString(r, "Description", 255),
+                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
                 PayPeriod = GetString(r, "PayPeriod", 20),
                 PayAmt = GetDecimal(r, "PayAmt"),
-                TimeUnemployed = GetString(r, "TimeUnemployed", 50),
             };
             db.FinSpUnemploys.Add(e);
         }
@@ -411,16 +363,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinAuto(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinAuto
             {
-                Id = GetInt32(r, "AutoCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                AutoCounter = GetInt32Nullable(r, "AutoCounter"),
                 Model = GetString(r, "Model", 50),
                 Year = GetString(r, "Year", 4),
                 Balance = GetDecimal(r, "Balance"),
@@ -432,16 +381,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinBank(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinBank
             {
-                Id = GetInt32(r, "BankCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                BankCounter = GetInt32Nullable(r, "BankCounter"),
                 BankName = GetString(r, "BankName", 100),
                 AccountType = GetString(r, "AccountType", 50),
                 Balance = GetDecimal(r, "Balance"),
@@ -453,16 +399,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinHome(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinHome
             {
-                Id = GetInt32(r, "HomeCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                HomeCounter = GetInt32Nullable(r, "HomeCounter"),
                 MortgagePay = GetDecimal(r, "MortgagePay"),
                 HomeValue = GetDecimal(r, "HomeValue"),
                 MortgageBalance = GetDecimal(r, "MortgageBalance"),
@@ -474,16 +417,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinRent(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinRent
             {
-                Id = GetInt32(r, "RentCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                RentCounter = GetInt32Nullable(r, "RentCounter"),
                 MonthlyRent = GetDecimal(r, "MonthlyRent"),
             };
             db.FinRents.Add(e);
@@ -493,16 +433,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateFinOther(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new FinOther
             {
-                Id = GetInt32(r, "OtherCounter"),
                 DefendantId = GetString(r, "ApplicationNumber", 9),
+                OtherCounter = GetInt32Nullable(r, "OtherCounter"),
                 Type = GetString(r, "Type", 50),
                 Description = GetString(r, "Description", 255),
                 MonthlyAmount = GetDecimal(r, "MonthlyAmount"),
@@ -515,16 +452,13 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateCharge(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Charge
             {
                 ApplicationNumber = GetInt32(r, "ApplicationNumber"),
-                ChargeNumber = GetString(r, "ChargeNumber", 20),
+                ChargeNumber = GetInt32Nullable(r, "ChargeNumber"),
                 ChargeType = GetString(r, "ChargeType", 50),
                 CaseNumber = GetString(r, "CaseNumber", 20),
                 ChargeDate = GetDateTime(r, "ChargeDate"),
@@ -540,10 +474,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateWarrant(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Warrant
@@ -553,10 +484,10 @@ public class AccdbToSqliteMigrationService
                 CaseNumber = GetString(r, "CaseNumber", 20),
                 Date = GetDateTime(r, "Date"),
                 ArrestDate = GetDateTime(r, "ArrestDate"),
-                JurisdictionCode = GetString(r, "JurisdictionCode", 10),
+                JurisdictionCode = GetEnumNullable<JurisdictionCode>(r, "JurisdictionCode"),
                 BondType = GetString(r, "BondType", 20),
                 BondAmt = GetDecimal(r, "BondAmt"),
-                Jail = GetBool(r, "Jail"),
+                Jail = GetBoolNullable(r, "Jail"),
                 AddOnCase = GetString(r, "AddOnCase", 255),
             };
             db.Warrants.Add(e);
@@ -566,10 +497,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateAppointment(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Appointment
@@ -581,12 +509,12 @@ public class AccdbToSqliteMigrationService
                 DateSigned = GetDateTime(r, "DateSigned"),
                 DenyCode = GetString(r, "DenyCode", 10),
                 RemovalCode = GetString(r, "RemovalCode", 10),
-                Bonded = GetBool(r, "Bonded"),
-                GAL = GetBool(r, "GAL"),
+                Bonded = GetBoolNullable(r, "Bonded"),
+                GAL = GetBoolNullable(r, "GAL"),
                 VoucherNumber = GetString(r, "VoucherNumber", 20),
                 VoucherLetter = GetString(r, "VoucherLetter", 5),
-                ContractCase = GetBool(r, "ContractCase"),
-                DUICourt = GetBool(r, "DUICourt"),
+                ContractCase = GetBoolNullable(r, "ContractCase"),
+                DUICourt = GetBoolNullable(r, "DUICourt"),
                 JuvenileSubstType = GetString(r, "JuvenileSubstType", 50),
             };
             db.Appointments.Add(e);
@@ -596,17 +524,14 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateVoucher(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Voucher
             {
                 VoucherNumber = GetString(r, "VoucherNumber", 20),
                 VoucherLetter = GetString(r, "VoucherLetter", 5),
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
+                ApplicationNumber = GetInt32Nullable(r, "ApplicationNumber") ?? 0,
                 AttyCode = GetString(r, "AttyCode", 10),
                 DateVchrPaid = GetDateTime(r, "DateVchrPaid"),
                 DateCaseCompleted = GetDateTime(r, "DateCaseCompleted"),
@@ -615,7 +540,7 @@ public class AccdbToSqliteMigrationService
                 CourtOrderedReimburse = GetDecimal(r, "CourtOrderedReimburse"),
                 TotalVoucherAmt = GetDecimal(r, "TotalVoucherAmt"),
                 TotalAmountPaid = GetDecimal(r, "TotalAmountPaid"),
-                Outcome = GetString(r, "Outcome", 50),
+                Outcome = GetEnumNullable<VoucherOutcome>(r, "Outcome"),
                 OutcomeOther = GetString(r, "OutcomeOther", 255),
             };
             db.Vouchers.Add(e);
@@ -625,10 +550,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateEIA(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new EIA
@@ -648,10 +570,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateChargeId(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new ChargeId
@@ -667,10 +586,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateDenialCode(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new DenialCode
@@ -686,10 +602,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateRemovalCode(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new RemovalCode
@@ -705,10 +618,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateJurisdiction(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Jurisdiction
@@ -723,10 +633,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateJudge(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new Judge
@@ -741,10 +648,7 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateIncomeSource(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
             var e = new IncomeSource
@@ -759,13 +663,10 @@ public class AccdbToSqliteMigrationService
 
     private void MigrateType(OleDbDataReader r)
     {
-        var optsBuilder = new DbContextOptionsBuilder<PdTrackerDbContext>();
-        optsBuilder.UseSqlite($"Data Source={_sqlitePath}");
-        using var db = new PdTrackerDbContext(optsBuilder.Options);
-
+        using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
         while (r.Read())
         {
-            var e = new Type
+            var e = new Core.Entities.Type
             {
                 TypeCode = GetString(r, "TYPE", 2),
                 TypeDescription = GetString(r, "TYPEDES", 50),
@@ -799,6 +700,17 @@ public class AccdbToSqliteMigrationService
         catch { return 0; }
     }
 
+    private static int? GetInt32Nullable(OleDbDataReader r, string name)
+    {
+        try
+        {
+            var val = r[name];
+            if (val == null || val == DBNull.Value) return null;
+            return Convert.ToInt32(val);
+        }
+        catch { return null; }
+    }
+
     private static bool GetBool(OleDbDataReader r, string name)
     {
         try
@@ -806,10 +718,25 @@ public class AccdbToSqliteMigrationService
             var val = r[name];
             if (val == null || val == DBNull.Value) return false;
             if (val is bool b) return b;
+            if (val is int i) return i != 0;
             var s = val.ToString()?.ToUpperInvariant();
             return s == "TRUE" || s == "T" || s == "1" || s == "-1";
         }
         catch { return false; }
+    }
+
+    private static bool? GetBoolNullable(OleDbDataReader r, string name)
+    {
+        try
+        {
+            var val = r[name];
+            if (val == null || val == DBNull.Value) return null;
+            if (val is bool b) return b;
+            if (val is int i) return i != 0;
+            var s = val.ToString()?.ToUpperInvariant();
+            return s == "TRUE" || s == "T" || s == "1" || s == "-1";
+        }
+        catch { return null; }
     }
 
     private static decimal GetDecimal(OleDbDataReader r, string name)
@@ -834,10 +761,32 @@ public class AccdbToSqliteMigrationService
         catch { return DateTime.MinValue; }
     }
 
+    private static T GetEnum<T>(OleDbDataReader r, string name) where T : struct, Enum
+    {
+        try
+        {
+            var val = r[name];
+            if (val == null || val == DBNull.Value) return default;
+            var s = val.ToString() ?? "";
+            return Enum.TryParse<T>(s, true, out var result) ? result : default;
+        }
+        catch { return default; }
+    }
+
+    private static T? GetEnumNullable<T>(OleDbDataReader r, string name) where T : struct, Enum
+    {
+        try
+        {
+            var val = r[name];
+            if (val == null || val == DBNull.Value) return null;
+            var s = val.ToString() ?? "";
+            return Enum.TryParse<T>(s, true, out var result) ? result : null;
+        }
+        catch { return null; }
+    }
+
     private static string BuildAceConnectionString(string accdbPath)
     {
-        // ACE 12/14 provider — works with Access 2007+ .accdb files
-        // Provider must match the bitness of the running process (64-bit here)
         return $"Provider=Microsoft.ACE.OLEDB.12.0;Data Source={accdbPath};Persist Security Info=False;";
     }
 }
