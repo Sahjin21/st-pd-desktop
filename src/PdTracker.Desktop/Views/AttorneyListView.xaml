@@ -1,0 +1,152 @@
+<UserControl x:Class="PdTracker.Desktop.Views.AttorneyListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#2D5A8A" Padding="16,10" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Attorney List" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
+                <Button Grid.Column="1" Content="+ Add New Attorney" Command="{Binding StartAddCommand}"
+                        Padding="16,6" Margin="0,0,8,0" Background="#4A8AC0" Foreground="White" BorderThickness="0"/>
+                <TextBox Grid.Column="2" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                         Width="200" Padding="8,6" VerticalContentAlignment="Center">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+            </Grid>
+        </Border>
+
+        <!-- List -->
+        <Grid Grid.Row="1" Visibility="{Binding IsEditMode, Converter={StaticResource InverseBoolToVisibilityConverter}}">
+            <DataGrid ItemsSource="{Binding Results}"
+                      SelectedItem="{Binding SelectedAttorney}"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                      GridLinesVisibility="Horizontal">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Code" Binding="{Binding AttyCode}" Width="60"/>
+                    <DataGridTextColumn Header="Last Name" Binding="{Binding LastName}" Width="120"/>
+                    <DataGridTextColumn Header="First Name" Binding="{Binding FirstName}" Width="100"/>
+                    <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="180"/>
+                    <DataGridTextColumn Header="Office" Binding="{Binding OfficeNumber}" Width="100"/>
+                    <DataGridTextColumn Header="Mobile" Binding="{Binding MobileNumber}" Width="110"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="70"/>
+                    <DataGridCheckBoxColumn Header="Felony" Binding="{Binding Felony}" Width="50"/>
+                    <DataGridCheckBoxColumn Header="Misd" Binding="{Binding Misd}" Width="50"/>
+                    <DataGridCheckBoxColumn Header="Juvenile" Binding="{Binding Juvenile}" Width="60"/>
+                    <DataGridCheckBoxColumn Header="GAL" Binding="{Binding GAL}" Width="40"/>
+                </DataGrid.Columns>
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Edit Attorney" Command="{Binding StartEditCommand}"/>
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+            </DataGrid>
+        </Grid>
+
+        <!-- Edit Panel -->
+        <Border Grid.Row="1" Visibility="{Binding IsEditMode, Converter={StaticResource BoolToVisibilityConverter}}"
+                Background="White" BorderBrush="#2D5A8A" BorderThickness="2" CornerRadius="4" Padding="24">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel MaxWidth="600">
+                    <TextBlock Text="{Binding EditingAttorney.AttyCode, StringFormat='Editing: {0}'}"
+                               FontSize="18" FontWeight="SemiBold" Margin="0,0,0,20"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Atty Code:*" Margin="0,6"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding EditingAttorney.AttyCode}" Margin="0,4" IsEnabled="{Binding EditingAttorney.Id, Converter={StaticResource NullToEnabledConverter}}"/>
+
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Status" Margin="0,6"/>
+                        <ComboBox Grid.Row="0" Grid.Column="3" SelectedValue="{Binding EditingAttorney.Status}" Margin="0,4">
+                            <ComboBoxItem Content="Active"/>
+                            <ComboBoxItem Content="Inactive"/>
+                            <ComboBoxItem Content="Suspended"/>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="First Name:*" Margin="0,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding EditingAttorney.FirstName}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Middle" Margin="0,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding EditingAttorney.MiddleName}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Last Name:*" Margin="0,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding EditingAttorney.LastName}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Street" Margin="0,6"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding EditingAttorney.Street}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="City" Margin="0,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding EditingAttorney.City}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="2" Text="State" Margin="0,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding EditingAttorney.State}" Width="60" HorizontalAlignment="Left" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Email" Margin="0,6"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding EditingAttorney.Email}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="2" Text="Office #" Margin="0,6"/>
+                        <TextBox Grid.Row="5" Grid.Column="3" Text="{Binding EditingAttorney.OfficeNumber}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Mobile" Margin="0,6"/>
+                        <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding EditingAttorney.MobileNumber}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="2" Text="Fax" Margin="0,6"/>
+                        <TextBox Grid.Row="6" Grid.Column="3" Text="{Binding EditingAttorney.FaxNumber}" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="7" Grid.Column="0" Text="Vendor #" Margin="0,6"/>
+                        <TextBox Grid.Row="7" Grid.Column="1" Text="{Binding EditingAttorney.VendorNumber}" Margin="0,4"/>
+
+                        <!-- Case type checkboxes -->
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Case Types" Margin="0,12,0,0"/>
+                        <StackPanel Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,12,0,0">
+                            <CheckBox Content="Felony" IsChecked="{Binding EditingAttorney.Felony}" Margin="0,0,16,0"/>
+                            <CheckBox Content="Misd" IsChecked="{Binding EditingAttorney.Misd}" Margin="0,0,16,0"/>
+                            <CheckBox Content="Juvenile" IsChecked="{Binding EditingAttorney.Juvenile}" Margin="0,0,16,0"/>
+                            <CheckBox Content="Appeal" IsChecked="{Binding EditingAttorney.Appeal}" Margin="0,0,16,0"/>
+                            <CheckBox Content="GAL" IsChecked="{Binding EditingAttorney.GAL}" Margin="0,0,16,0"/>
+                            <CheckBox Content="Death Penalty" IsChecked="{Binding EditingAttorney.DeathPenalty}" Margin="0,0,16,0"/>
+                            <CheckBox Content="Murder" IsChecked="{Binding EditingAttorney.Murder}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Notes" Margin="0,12,0,6"/>
+                    <TextBox Text="{Binding EditingAttorney.Notes}" TextWrapping="Wrap" AcceptsReturn="True" Height="80" Margin="0,0,0,20"/>
+
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Save" Command="{Binding SaveCommand}" Padding="24,8" Background="#2D5A8A" Foreground="White"/>
+                        <Button Content="Cancel" Command="{Binding CancelEditCommand}" Padding="24,8" Margin="12,0,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

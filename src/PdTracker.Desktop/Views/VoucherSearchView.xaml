@@ -1,0 +1,96 @@
+<UserControl x:Class="PdTracker.Desktop.Views.VoucherSearchView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Search -->
+        <Border Grid.Row="0" Margin="0,0,0,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{Binding VoucherNumber, UpdateSourceTrigger=PropertyChanged}"
+                         FontSize="14" Padding="10,8" Margin="0,0,8,0"
+                         VerticalContentAlignment="Center">
+                    <TextBox.InputBindings>
+                        <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                    </TextBox.InputBindings>
+                </TextBox>
+                <Button Grid.Column="1" Content="Search Voucher" Command="{Binding SearchCommand}"
+                        Padding="24,8" FontSize="14" Cursor="Hand"/>
+            </Grid>
+        </Border>
+
+        <!-- Results -->
+        <Grid Grid.Row="1" Visibility="{Binding SelectedVoucher, Converter={StaticResource NullToVisibilityConverter}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="200"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <DataGrid Grid.Row="0" ItemsSource="{Binding Results}"
+                      SelectedItem="{Binding SelectedVoucher}"
+                      AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Voucher #" Binding="{Binding VoucherNumber}" Width="100"/>
+                    <DataGridTextColumn Header="App #" Binding="{Binding ApplicationNumber}" Width="70"/>
+                    <DataGridTextColumn Header="Attorney" Binding="{Binding Attorney.DisplayName}" Width="140"/>
+                    <DataGridTextColumn Header="Paid Date" Binding="{Binding DateVchrPaid, StringFormat={}{0:MM/dd/yyyy}}" Width="90"/>
+                    <DataGridTextColumn Header="Total Amt" Binding="{Binding TotalAmountPaid, StringFormat={}{0:C}}" Width="90"/>
+                    <DataGridTextColumn Header="Outcome" Binding="{Binding Outcome}" Width="80"/>
+                    <DataGridTextColumn Header="In Hours" Binding="{Binding InCourtHours}" Width="70"/>
+                    <DataGridTextColumn Header="Out Hours" Binding="{Binding OutCourtHours}" Width="70"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Detail Panel -->
+            <Border Grid.Row="1" BorderBrush="#CCC" BorderThickness="1" CornerRadius="4" Margin="0,16,0,0" Padding="16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Voucher Details" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Voucher Number:" Margin="0,3"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedVoucher.VoucherNumber}" Margin="0,3"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Date Paid:" Margin="0,3"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedVoucher.DateVchrPaid, StringFormat={}{0:MM/dd/yyyy}}" Margin="0,3"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Date Completed:" Margin="0,3"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedVoucher.DateCaseCompleted, StringFormat={}{0:MM/dd/yyyy}}" Margin="0,3"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Outcome:" Margin="0,3"/>
+                            <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedVoucher.Outcome}" Margin="0,3"/>
+                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Total Amount:" Margin="0,3"/>
+                            <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedVoucher.TotalAmountPaid, StringFormat={}{0:C}}" Margin="0,3"/>
+                            <TextBlock Grid.Row="5" Grid.Column="0" Text="In Court Hours:" Margin="0,3"/>
+                            <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedVoucher.InCourtHours}" Margin="0,3"/>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <TextBlock Grid.Row="1" Text="Enter a voucher number or app # to search"
+                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                   Foreground="Gray" FontStyle="Italic" FontSize="14"/>
+    </Grid>
+</UserControl>
