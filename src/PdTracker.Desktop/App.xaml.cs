@@ -72,7 +72,9 @@ public partial class App : Application
             using var scope = Services.CreateScope();
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
             using var db = dbFactory.CreateDbContext();
-            db.Database.CanConnect().GetAwaiter().GetResult();
+            var canConnect = db.Database.CanConnect();
+            if (!canConnect)
+                throw new Exception($"Could not connect to database '{db.Database.GetConnectionString()}'.");
         }
         catch (Exception ex)
         {
