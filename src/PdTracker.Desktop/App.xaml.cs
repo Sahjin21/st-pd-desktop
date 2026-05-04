@@ -1,4 +1,3 @@
-using System.Data.SqlClient;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
@@ -73,13 +72,13 @@ public partial class App : Application
             using var scope = Services.CreateScope();
             var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
             using var db = dbFactory.CreateDbContext();
-            db.Database.CanConnect().Wait();
+            db.Database.CanConnect().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             ShowError("Database Connection Failed",
                 new Exception($"Could not connect to SQL Server with the provided connection string.\n\n{ex.Message}", ex));
-            Shutdown(1);
+            Current.Shutdown(1);
         }
     }
 
