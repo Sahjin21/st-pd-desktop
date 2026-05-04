@@ -43,11 +43,35 @@ public partial class App : Application
         // Load settings
         var settings = LoadSettings();
         string sqlitePath = settings.SqlitePath ?? "";
+        string accdbPath = settings.AccdbPath ?? "";
 
-        // If sqlite file doesn't exist, need to set up (either first run or file deleted/moved)
+        // Derive what the sqlite path *should* be for the stored accdb source
+        string expectedSqlitePath = !string.IsNullOrEmpty(accdbPath)
+            ? Path.ChangeExtension(accdbPath, ".sqlite") ?? ""
+            : sqlitePath;
+
+        // If sqlite file doesn't exist, OR accdb source changed since last run, need to re-set up
+        bool sqliteIsStale = false;
         if (!File.Exists(sqlitePath))
         {
-            // Always show file picker — user picks either .accdb (to migrate) or .sqlite (existing db)
+            // sqlite gone/missing — need to pick a source
+            sqliteIsStale = true;
+        }
+        else if (!string.IsNullOrEmpty(accdbPath) && File.Exists(accdbPath))
+        {
+            // sqlite exists — check if it was built from a different accdb than stored
+            if (!string.Equals(sqlitePath, expectedSqlitePath, StringComparison.OrdinalIgnoreCase))
+                sqliteIsStale = true;
+        }
+        else if (!string.IsNullOrEmpty(sqlitePath) && string.IsNullOrEmpty(accdbPath))
+        {
+            // Sqlite stored but no accdb source recorded — might be stale
+            sqliteIsStale = true;
+        }
+
+        if (sqliteIsStale)
+        {
+            // Show picker — user picks .accdb (to migrate) or .sqlite (existing db)
             var picker = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Select PD Tracker Database — pick the .accdb to migrate, or an existing .sqlite file",
@@ -63,33 +87,30 @@ public partial class App : Application
                 return;
             }
 
-            sqlitePath = picker.FileName;
+            var pickedPath = picker.FileName;
+            var ext = Path.GetExtension(pickedPath).ToLowerInvariant();
 
-            // If user picked an .accdb / .mdb → one-time migration to .sqlite
-            var ext = Path.GetExtension(sqlitePath).ToLowerInvariant();
-            string? accdbPath = null;
             if (ext == ".accdb" || ext == ".mdb")
             {
-                accdbPath = sqlitePath; // remember the source before it gets overwritten
-                // Always produce a .sqlite file next to the .accdb
-                var sqliteFile = Path.ChangeExtension(sqlitePath, ".sqlite");
-                // Remove any existing stale sqlite so migration runs fresh
-                if (File.Exists(sqliteFile)) File.Delete(sqliteFile);
+                // Migrate from Access — always produce a .sqlite in the same folder
+                accdbPath = pickedPath;
+                sqlitePath = Path.ChangeExtension(pickedPath, ".sqlite") ?? pickedPath;
+
+                // User picked an accdb — delete any existing sqlite at the target
+                // so we do a clean migration without duplicate-key conflicts
+                if (File.Exists(sqlitePath))
+                    File.Delete(sqlitePath);
 
                 var migrateWindow = new MigrationWindow();
                 migrateWindow.Show();
 
-                var migrator = new AccdbToSqliteMigrationService(sqlitePath, sqliteFile);
+                var migrator = new AccdbToSqliteMigrationService(accdbPath, sqlitePath);
                 migrator.OnProgress += msg => migrateWindow.AppendLog(msg);
 
                 try
                 {
                     migrator.TestAccessConnection();
                     migrator.Run();
-                    sqlitePath = sqliteFile;
-
-                    // Persist the source accdb path so we know where the data came from
-                    settings.AccdbPath = accdbPath;
                     migrateWindow.AppendLog("Done! You can now delete your old .accdb file.");
                     migrateWindow.Done();
                 }
@@ -102,10 +123,17 @@ public partial class App : Application
                     return;
                 }
             }
+            else
+            {
+                // Picked a sqlite file directly — use it as-is
+                sqlitePath = pickedPath;
+                accdbPath = ""; // don't know the source
+            }
         }
 
         // Persist
         settings.SqlitePath = sqlitePath;
+        settings.AccdbPath = accdbPath;
         SaveSettings(settings);
 
         // Configure EF Core + DI
