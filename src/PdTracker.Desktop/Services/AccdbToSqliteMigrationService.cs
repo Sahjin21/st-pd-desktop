@@ -3,6 +3,8 @@ using PdTracker.Core.Entities;
 using PdTracker.Data.DbContext;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace PdTracker.Desktop.Services;
@@ -150,7 +152,7 @@ public class AccdbToSqliteMigrationService
     // ─── DAO recordset helpers ──────────────────────────────────────────
 
     private Recordset OpenRecordset(string sql)
-        => _daoDb!.OpenRecordset(sql, DAO.RecordsetTypeEnum.dbOpenDynaset);
+        => _daoDb!.OpenRecordset(sql, RecordsetTypeEnum.dbOpenDynaset);
 
     private static string? GetString(Recordset rs, string field, int maxLen = 0)
     {
@@ -200,7 +202,7 @@ public class AccdbToSqliteMigrationService
             if (val == null || val == DBNull.Value) return null;
             if (val is bool b) return b;
             if (val is int i) return i != 0;
-            if (val is string s) return s.In("Y", "T", "1", "YES", "TRUE", StringComparison.OrdinalIgnoreCase);
+            if (val is string s) return new[] { "Y", "T", "1", "YES", "TRUE" }.Contains(s, StringComparer.OrdinalIgnoreCase);
             return null;
         }
         catch { return null; }

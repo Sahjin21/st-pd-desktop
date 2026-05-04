@@ -109,7 +109,6 @@ public partial class App : Application
 
                 try
                 {
-                    migrator.TestAccessConnection();
                     migrator.Run();
                     migrateWindow.AppendLog("Done! You can now delete your old .accdb file.");
                     migrateWindow.Done();
