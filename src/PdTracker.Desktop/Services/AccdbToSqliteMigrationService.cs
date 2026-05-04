@@ -19,7 +19,7 @@ public class AccdbToSqliteMigrationService
     private Database? _daoDb;
 
     // DAO table attribute flags
-    private const int dbAttachedTable = 0x80000002; // linked table
+    private const int dbAttachedTable = unchecked((int)0x80000002); // linked table
     private const int dbHiddenObject = 0x00000001;   // hidden system object
 
     public event Action<string>? OnProgress;
