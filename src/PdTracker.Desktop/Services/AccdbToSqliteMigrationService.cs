@@ -478,12 +478,21 @@ public class AccdbToSqliteMigrationService
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
             var rs = OpenRecordset("SELECT * FROM DEFENDANT");
-            int count = 0;
+            int count = 0, dupes = 0, batch = 0;
+            var seen = new HashSet<string>();
             while (!rs.EOF)
             {
+                var id = GetString(rs, "DefendantID", 9) ?? "";
+                if (!seen.Add(id))
+                {
+                    OnProgress?.Invoke($"  SKIP dupe DEFENDANT: {id}");
+                    dupes++;
+                    rs.MoveNext();
+                    continue;
+                }
                 db.Defendants.Add(new Defendant
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = id,
                     ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
                     SOID = GetString(rs, "SOID", 20),
                     FirstName = GetString(rs, "FirstName", 50) ?? "",
@@ -504,12 +513,18 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200)
+                {
+                    db.SaveChanges();
+                    batch = 0;
+                }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEFENDANT records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEFENDANT records. ({dupes} duplicates skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEFENDANT: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEFENDANT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateQualify()
@@ -540,7 +555,7 @@ public class AccdbToSqliteMigrationService
             db.SaveChanges();
             OnProgress?.Invoke($"  Migrated {count} QUALIFY records.");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR QUALIFY: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR QUALIFY: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     // ─── Defendant satellites ───────────────────────────────────────────
@@ -551,13 +566,22 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEF_ADDRESS");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId))
+                {
+                    OnProgress?.Invoke($"  SKIP FK-orphan DEF_ADDRESS: DefendantId={defId}");
+                    skipped++;
+                    rs.MoveNext();
+                    continue;
+                }
                 db.DefAddresses.Add(new DefAddress
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     Street = GetString(rs, "Street", 100),
                     City = GetString(rs, "City", 50),
                     State = GetString(rs, "State", 2),
@@ -566,12 +590,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEF_ADDRESS records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_ADDRESS records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_ADDRESS: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_ADDRESS: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private static AddressFlag ParseAddressFlag(string? val)
@@ -587,24 +613,29 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEF_PHONE");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.DefPhones.Add(new DefPhone
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     PhoneNumber = GetString(rs, "PhoneNumber", 20),
                     PhoneType = GetString(rs, "PhoneType", 20),
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEF_PHONE records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_PHONE records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_PHONE: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_PHONE: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateDefSpouse()
@@ -613,13 +644,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEF_SPOUSE");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.DefSpouses.Add(new DefSpouse
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     FirstName = GetString(rs, "FirstName", 50),
                     MiddleName = GetString(rs, "MiddleName", 50),
                     LastName = GetString(rs, "LastName", 50),
@@ -628,12 +662,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEF_SPOUSE records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_SPOUSE records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_SPOUSE: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_SPOUSE: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateDefAlias()
@@ -642,25 +678,30 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEF_ALIAS");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.DefAliases.Add(new DefAlias
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     FirstName = GetString(rs, "FirstName", 50),
                     MiddleName = GetString(rs, "MiddleName", 50),
                     LastName = GetString(rs, "LastName", 50),
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEF_ALIAS records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEF_ALIAS records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_ALIAS: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_ALIAS: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateDependent()
@@ -669,25 +710,30 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEPENDENT");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.Dependents.Add(new Dependent
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     FirstName = GetString(rs, "FirstName", 50),
                     MiddleName = GetString(rs, "MiddleName", 50),
                     LastName = GetString(rs, "LastName", 50),
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEPENDENT records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} DEPENDENT records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEPENDENT: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEPENDENT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     // ─── Financial entities ──────────────────────────────────────────────
@@ -698,13 +744,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FIN_EMPLOYER");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinEmployers.Add(new FinEmployer
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     EmployerCounter = GetInt32Nullable(rs, "EmployerCounter"),
                     EmployerName = GetString(rs, "EmployerName", 100),
                     City = GetString(rs, "City", 50),
@@ -716,12 +765,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FIN_EMPLOYER records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_EMPLOYER records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_EMPLOYER: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_EMPLOYER: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinSpEmployer()
@@ -730,13 +781,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FIN_SPEMPLOYER");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinSpEmployers.Add(new FinSpEmployer
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     SpEmployerCounter = GetInt32Nullable(rs, "SpunemployCounter"),
                     EmployerName = GetString(rs, "EmployerName", 100),
                     City = GetString(rs, "City", 50),
@@ -746,12 +800,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FIN_SPEMPLOYER records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_SPEMPLOYER records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_SPEMPLOYER: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_SPEMPLOYER: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinUnemployed()
@@ -760,13 +816,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FIN_UNEMPLOYED");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinUnemployeds.Add(new FinUnemployed
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     UnemployCounter = GetInt32Nullable(rs, "UnemployCounter"),
                     IncomeSource = ParseIncomeSource(GetString(rs, "IncomeSource")),
                     Description = GetString(rs, "Description", 255),
@@ -776,12 +835,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FIN_UNEMPLOYED records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_UNEMPLOYED records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_UNEMPLOYED: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_UNEMPLOYED: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinSpUnemploy()
@@ -790,13 +851,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FIN_SPUNEMPLOY");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinSpUnemploys.Add(new FinSpUnemploy
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     SpUnemployCounter = GetInt32Nullable(rs, "SpunemployCounter"),
                     IncomeSource = ParseIncomeSource(GetString(rs, "IncomeSource")),
                     Description = GetString(rs, "Description", 255),
@@ -806,12 +870,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FIN_SPUNEMPLOY records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FIN_SPUNEMPLOY records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_SPUNEMPLOY: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FIN_SPUNEMPLOY: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinAuto()
@@ -820,13 +886,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FINANCE_AUTO");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinAutos.Add(new FinAuto
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     AutoCounter = GetInt32Nullable(rs, "AutoCounter"),
                     Model = GetString(rs, "Model", 50),
                     Year = GetString(rs, "Year", 4),
@@ -834,12 +903,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FINANCE_AUTO records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_AUTO records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_AUTO: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_AUTO: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinBank()
@@ -848,13 +919,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FINANCE_BANK");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinBanks.Add(new FinBank
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     BankCounter = GetInt32Nullable(rs, "BankCounter"),
                     BankName = GetString(rs, "BankName", 100),
                     AccountType = GetString(rs, "AccountType", 50),
@@ -862,12 +936,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FINANCE_BANK records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_BANK records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_BANK: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_BANK: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinHome()
@@ -876,13 +952,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FINANCE_HOME");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinHomes.Add(new FinHome
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     HomeCounter = GetInt32Nullable(rs, "HomeCounter"),
                     MortgagePay = (decimal?)GetDoubleNullable(rs, "MortgagePay"),
                     HomeValue = (decimal?)GetDoubleNullable(rs, "HomeValue"),
@@ -890,12 +969,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FINANCE_HOME records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_HOME records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_HOME: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_HOME: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinRent()
@@ -904,24 +985,29 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FINANCE_RENT");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinRents.Add(new FinRent
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     RentCounter = GetInt32Nullable(rs, "RentCounter"),
                     MonthlyRent = (decimal?)GetDoubleNullable(rs, "MonthlyRent"),
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FINANCE_RENT records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_RENT records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_RENT: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_RENT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateFinOther()
@@ -930,13 +1016,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM FINANCE_OTHER");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.FinOthers.Add(new FinOther
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     OtherCounter = GetInt32Nullable(rs, "OtherCounter"),
                     Type = GetString(rs, "Type", 50),
                     Description = GetString(rs, "Description", 255),
@@ -945,12 +1034,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} FINANCE_OTHER records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} FINANCE_OTHER records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_OTHER: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR FINANCE_OTHER: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     // ─── Case management ────────────────────────────────────────────────
@@ -961,13 +1052,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM CHARGE");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var appNum = GetInt32(rs, "ApplicationNumber");
+                if (!existingAppNums.Contains(appNum)) { skipped++; rs.MoveNext(); continue; }
                 db.Charges.Add(new Charge
                 {
-                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    ApplicationNumber = appNum,
                     ChargeNumber = GetInt32Nullable(rs, "ChargeNumber"),
                     ChargeType = GetString(rs, "ChargeType", 50),
                     CaseNumber = GetString(rs, "CaseNumber", 20),
@@ -979,12 +1073,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} CHARGE records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} CHARGE records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR CHARGE: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR CHARGE: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateWarrant()
@@ -993,13 +1089,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM WARRANT");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var appNum = GetInt32(rs, "ApplicationNumber");
+                if (!existingAppNums.Contains(appNum)) { skipped++; rs.MoveNext(); continue; }
                 db.Warrants.Add(new Warrant
                 {
-                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    ApplicationNumber = appNum,
                     WarrantNumber = GetString(rs, "WarrantNumber", 20),
                     CaseNumber = GetString(rs, "CaseNumber", 20),
                     Date = GetDateTime(rs, "Date"),
@@ -1012,12 +1111,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} WARRANT records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} WARRANT records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR WARRANT: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR WARRANT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateAppointment()
@@ -1026,13 +1127,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM APPOINTMENT");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var appNum = GetInt32(rs, "ApplicationNumber");
+                if (!existingAppNums.Contains(appNum)) { skipped++; rs.MoveNext(); continue; }
                 db.Appointments.Add(new Appointment
                 {
-                    ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
+                    ApplicationNumber = appNum,
                     AttyCode = GetString(rs, "AttyCode", 10) ?? "",
                     Date = GetDateTime(rs, "Date"),
                     Action = GetString(rs, "Action", 5),
@@ -1049,12 +1153,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} APPOINTMENT records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} APPOINTMENT records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR APPOINTMENT: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR APPOINTMENT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateVoucher()
@@ -1063,15 +1169,32 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM VOUCHER");
-            int count = 0;
+            int count = 0, dupes = 0, skipped = 0, batch = 0;
+            var seenVnums = new HashSet<string>();
             while (!rs.EOF)
             {
+                var vnum = GetString(rs, "VoucherNumber", 20) ?? "";
+                if (!seenVnums.Add(vnum))
+                {
+                    OnProgress?.Invoke($"  SKIP dupe VOUCHER: {vnum}");
+                    dupes++;
+                    rs.MoveNext();
+                    continue;
+                }
+                var appNum = GetInt32Nullable(rs, "ApplicationNumber");
+                if (appNum.HasValue && !existingAppNums.Contains(appNum.Value))
+                {
+                    skipped++;
+                    rs.MoveNext();
+                    continue;
+                }
                 db.Vouchers.Add(new Voucher
                 {
-                    VoucherNumber = GetString(rs, "VoucherNumber", 20) ?? "",
+                    VoucherNumber = vnum,
                     VoucherLetter = GetString(rs, "VoucherLetter", 5),
-                    ApplicationNumber = GetInt32Nullable(rs, "ApplicationNumber"),
+                    ApplicationNumber = appNum,
                     AttyCode = GetString(rs, "AttyCode", 10),
                     DateVchrPaid = GetDateTime(rs, "DateVchrPaid"),
                     DateCaseCompleted = GetDateTime(rs, "DateCaseCompleted"),
@@ -1085,12 +1208,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} VOUCHER records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} VOUCHER records. ({dupes} dupes, {skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR VOUCHER: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR VOUCHER: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateEIA()
@@ -1099,13 +1224,16 @@ public class AccdbToSqliteMigrationService
         try
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
+            var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM EIA");
-            int count = 0;
+            int count = 0, skipped = 0, batch = 0;
             while (!rs.EOF)
             {
+                var defId = GetString(rs, "DefendantID", 9) ?? "";
+                if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
                 db.EIAs.Add(new EIA
                 {
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
+                    DefendantId = defId,
                     ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
                     Type = GetString(rs, "Type"),
                     ApplicationType = GetString(rs, "ApplicationType"),
@@ -1118,12 +1246,14 @@ public class AccdbToSqliteMigrationService
                 });
                 rs.MoveNext();
                 count++;
+                batch++;
+                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} EIA records.");
+            if (batch > 0) db.SaveChanges();
+            OnProgress?.Invoke($"  Migrated {count} EIA records. ({skipped} orphaned/skipped)");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  ERROR EIA: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  ERROR EIA: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 
     private void MigrateEIAWithDefendantIds()
@@ -1148,6 +1278,6 @@ public class AccdbToSqliteMigrationService
             db.SaveChanges();
             OnProgress?.Invoke($"  Backfilled DefendantId for {eias.Count} EIA records.");
         }
-        catch (Exception ex) { OnProgress?.Invoke($"  WARNING EIA backfill: {ex.Message}"); }
+        catch (Exception ex) { OnProgress?.Invoke($"  WARNING EIA backfill: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
 }
