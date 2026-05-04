@@ -17,15 +17,28 @@ public partial class MainWindow : Window
     private void OnNavigationRequested(object? sender, string viewName)
     {
         if (ContentArea == null) return;
-        ContentArea.Content = viewName switch
+        try
         {
-            "SearchDefendant" => App.Services.GetService(typeof(DefendantSearchView)),
-            "NewApplication" => App.Services.GetService(typeof(NewApplicationView)),
-            "EditAttorney" => App.Services.GetService(typeof(AttorneyListView)),
-            "AddAttorney" => App.Services.GetService(typeof(AttorneyListView)),
-            "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchView)),
-            "DefendantAZ" => App.Services.GetService(typeof(DefendantAZView)),
-            _ => null
-        };
+            ContentArea.Content = viewName switch
+            {
+                "SearchDefendant" => App.Services.GetService(typeof(DefendantSearchView)),
+                "NewApplication" => App.Services.GetService(typeof(NewApplicationView)),
+                "EditAttorney" => App.Services.GetService(typeof(AttorneyListView)),
+                "AddAttorney" => App.Services.GetService(typeof(AttorneyListView)),
+                "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchView)),
+                "DefendantAZ" => App.Services.GetService(typeof(DefendantAZView)),
+                _ => null
+            };
+        }
+        catch (Exception ex)
+        {
+            ContentArea.Content = new System.Windows.Controls.TextBlock
+            {
+                Text = $"Error loading {viewName}:\n{ex}",
+                Foreground = System.Windows.Media.Brushes.Red,
+                FontFamily = new System.Windows.Media.FontFamily("Consolas"),
+                TextWrapping = System.Windows.TextWrapping.Wrap
+            };
+        }
     }
 }
