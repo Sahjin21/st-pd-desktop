@@ -21,12 +21,12 @@
                    Text="This may take a few minutes depending on how much data you have."
                    Foreground="#666" Margin="0,28,0,16" FontSize="13"/>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                      BorderBrush="#CCC" BorderThickness="1" Padding="8">
-            <TextBlock x:Name="LogText"
-                       FontFamily="Consolas" FontSize="12"
-                       TextWrapping="Wrap"/>
-        </ScrollViewer>
+        <TextBox x:Name="LogText" Grid.Row="1"
+                IsReadOnly="True" VerticalScrollBarVisibility="Auto"
+                FontFamily="Consolas" FontSize="12"
+                TextWrapping="Wrap"
+                BorderBrush="#CCC" BorderThickness="1" Padding="8"
+                Background="#FAFAFA"/>
 
         <Button x:Name="CloseButton" Grid.Row="2"
                 Content="Close" IsEnabled="False"
