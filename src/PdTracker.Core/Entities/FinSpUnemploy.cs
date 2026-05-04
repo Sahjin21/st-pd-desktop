@@ -4,7 +4,7 @@ public class FinSpUnemploy : Entity
 {
     public string DefendantId { get; set; } = string.Empty;
     public int? SpUnemployCounter { get; set; }
-    public IncomeSource? IncomeSource { get; set; }
+    public IncomeSourceType? IncomeSource { get; set; }
     public string? Description { get; set; }
     public string? TimeUnemployed { get; set; }
     public string? PayPeriod { get; set; }
