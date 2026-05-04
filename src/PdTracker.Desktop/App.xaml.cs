@@ -1,8 +1,11 @@
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PdTracker.Data.DbContext;
+using PdTracker.Desktop.Services;
 using PdTracker.Desktop.ViewModels;
 using PdTracker.Desktop.Views;
 
@@ -11,11 +14,15 @@ namespace PdTracker.Desktop;
 public partial class App : Application
 {
     public static IServiceProvider Services { get; private set; } = null!;
-    public static string ConnectionString { get; private set; } = string.Empty;
+
+    private static readonly string SettingsPath =
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "PdTracker", "settings.json");
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Global exception handlers — catch everything so the window doesn't just vanish
+        // Global exception handlers
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             ShowError("AppDomain Error", args.ExceptionObject as Exception);
 
@@ -33,31 +40,97 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // Show connection setup first — don't even try to start without a valid connection
-        var setupWindow = new ConnectionSetupWindow();
-        if (setupWindow.ShowDialog() != true)
+        // Load settings — where is the SQLite database?
+        var settings = LoadSettings();
+        string sqlitePath = settings.SqlitePath ?? "";
+
+        if (string.IsNullOrEmpty(sqlitePath) || !File.Exists(sqlitePath))
         {
-            Shutdown();
-            return;
+            // First run — pick a database file
+            var picker = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Select PD Tracker Database",
+                Filter =
+                    "SQLite Database (*.db;*.sqlite;*.sqlite3)|*.db;*.sqlite;*.sqlite3|" +
+                    "Access Database (*.accdb;*.mdb)|*.accdb;*.mdb|" +
+                    "All Files (*.*)|*.*",
+            };
+
+            if (picker.ShowDialog() != true)
+            {
+                Current.Shutdown();
+                return;
+            }
+
+            sqlitePath = picker.FileName;
+
+            // If user picked an .accdb / .mdb → one-time migration to SQLite
+            var ext = Path.GetExtension(sqlitePath).ToLowerInvariant();
+            if (ext == ".accdb" || ext == ".mdb")
+            {
+                var sqliteFile = Path.ChangeExtension(sqlitePath, ".db");
+
+                var migrateWindow = new MigrationWindow();
+                migrateWindow.Show();
+
+                var migrator = new AccdbToSqliteMigrationService(sqlitePath, sqliteFile);
+                migrator.OnProgress += msg => migrateWindow.AppendLog(msg);
+
+                try
+                {
+                    migrator.TestAccessConnection();
+                    migrator.Run();
+                    sqlitePath = sqliteFile;
+                    migrateWindow.AppendLog("Done! You can now delete your old .accdb file.");
+                    migrateWindow.Done();
+                }
+                catch (Exception ex)
+                {
+                    migrateWindow.AppendLog($"ERROR: {ex.Message}");
+                    ShowError("Migration Failed", ex);
+                    migrateWindow.Close();
+                    Current.Shutdown();
+                    return;
+                }
+            }
         }
 
-        ConnectionString = setupWindow.ConnectionString;
-        ConfigureServices();
+        // Persist the path
+        settings.SqlitePath = sqlitePath;
+        SaveSettings(settings);
+
+        // Configure EF Core + DI
+        ConfigureServices(sqlitePath);
+
+        // Validate
+        try
+        {
+            using var scope = Services.CreateScope();
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
+            using var db = dbFactory.CreateDbContext();
+            if (!db.Database.CanConnect())
+                throw new Exception("Cannot connect to the database.");
+        }
+        catch (Exception ex)
+        {
+            ShowError("Database Error",
+                new Exception($"Could not open '{sqlitePath}'.\n\n{ex.Message}", ex));
+            Current.Shutdown();
+            return;
+        }
 
         var mainWindow = new MainWindow();
         mainWindow.Show();
     }
 
-    private static void ConfigureServices()
+    private static void ConfigureServices(string sqlitePath)
     {
         var services = new ServiceCollection();
+        var connString = $"Data Source={sqlitePath}";
 
-        // AddDbContextFactory registers IDbContextFactory<PdTrackerDbContext> (what ViewModels use)
-        // It also registers DbContextOptions<PdTrackerDbContext> internally
         services.AddDbContextFactory<PdTrackerDbContext>(options =>
-            options.UseSqlServer(ConnectionString));
+            options.UseSqlite(connString));
 
-        // Register ViewModels
         services.AddTransient<MainViewModel>();
         services.AddTransient<DefendantSearchViewModel>();
         services.AddTransient<NewApplicationViewModel>();
@@ -65,30 +138,44 @@ public partial class App : Application
         services.AddTransient<VoucherSearchViewModel>();
 
         Services = services.BuildServiceProvider();
+    }
 
-        // Validate connection before showing the main window
+    private static AppSettings LoadSettings()
+    {
         try
         {
-            using var scope = Services.CreateScope();
-            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
-            using var db = dbFactory.CreateDbContext();
-            var canConnect = db.Database.CanConnect();
-            if (!canConnect)
-                throw new Exception($"Could not connect to database '{db.Database.GetConnectionString()}'.");
+            if (File.Exists(SettingsPath))
+            {
+                var json = File.ReadAllText(SettingsPath);
+                return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            }
         }
-        catch (Exception ex)
+        catch { }
+        return new AppSettings();
+    }
+
+    private static void SaveSettings(AppSettings settings)
+    {
+        try
         {
-            ShowError("Database Connection Failed",
-                new Exception($"Could not connect to SQL Server with the provided connection string.\n\n{ex.Message}", ex));
-            Current.Shutdown(1);
+            var dir = Path.GetDirectoryName(SettingsPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(SettingsPath, json);
         }
+        catch { }
     }
 
     private static void ShowError(string title, Exception? ex)
     {
         var msg = ex?.Message ?? "Unknown error";
-        var details = ex?.ToString() ?? "";
-        MessageBox.Show($"{msg}\n\nFull details:\n{details}",
-            title, MessageBoxButton.OK, MessageBoxImage.Error);
+        MessageBox.Show($"{msg}\n\nFull details:\n{ex}", title,
+            MessageBoxButton.OK, MessageBoxImage.Error);
     }
+}
+
+public class AppSettings
+{
+    public string? SqlitePath { get; set; }
 }

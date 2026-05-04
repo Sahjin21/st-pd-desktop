@@ -43,6 +43,8 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<RemovalCode> RemovalCodes => Set<RemovalCode>();
     public DbSet<Jurisdiction> Jurisdictions => Set<Jurisdiction>();
     public DbSet<Judge> Judges => Set<Judge>();
+    public DbSet<IncomeSource> IncomeSources => Set<IncomeSource>();
+    public DbSet<Core.Entities.Type> Types => Set<Core.Entities.Type>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -499,33 +501,51 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<DenialCode>(e =>
         {
             e.ToTable("DENIAL_CODE");
-            e.HasKey(x => x.Code);
-            e.Property(x => x.Code).HasColumnName("Code").HasMaxLength(10);
+            e.HasKey(x => x.DenyCode);
+            e.Property(x => x.DenyCode).HasColumnName("DenyCode").HasMaxLength(10);
             e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(255);
+            e.Property(x => x.LongText).HasColumnName("Long text").HasMaxLength(100);
         });
 
         modelBuilder.Entity<RemovalCode>(e =>
         {
             e.ToTable("REMOVAL_CODE");
-            e.HasKey(x => x.Code);
-            e.Property(x => x.Code).HasColumnName("Code").HasMaxLength(10);
+            e.HasKey(x => x.RemovalCodeValue);
+            e.Property(x => x.RemovalCodeValue).HasColumnName("RemovalCode").HasMaxLength(10);
             e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(255);
+            e.Property(x => x.Statement).HasColumnName("Statement").HasMaxLength(100);
         });
 
         modelBuilder.Entity<Jurisdiction>(e =>
         {
             e.ToTable("JURISDICTION");
-            e.HasKey(x => x.Code);
-            e.Property(x => x.Code).HasColumnName("Code").HasMaxLength(5);
+            e.HasKey(x => x.JurisdictionCode);
+            e.Property(x => x.JurisdictionCode).HasColumnName("JurisdictionCode").HasMaxLength(5);
             e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(50);
         });
 
         modelBuilder.Entity<Judge>(e =>
         {
             e.ToTable("JUDGE");
-            e.HasKey(x => x.Code);
-            e.Property(x => x.Code).HasColumnName("Code").HasMaxLength(10);
-            e.Property(x => x.Name).HasColumnName("Name").HasMaxLength(50);
+            e.HasKey(x => x.JudgeCode);
+            e.Property(x => x.JudgeCode).HasColumnName("JudgeCode").HasMaxLength(10);
+            e.Property(x => x.Description).HasColumnName("description").HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<IncomeSource>(e =>
+        {
+            e.ToTable("INCOME_SOURCE");
+            e.HasKey(x => x.IncomeSourceCode);
+            e.Property(x => x.IncomeSourceCode).HasColumnName("IncomeSource").HasMaxLength(4);
+            e.Property(x => x.Description).HasColumnName("Description").HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<Core.Entities.Type>(e =>
+        {
+            e.ToTable("TYPE");
+            e.HasKey(x => x.TypeCode);
+            e.Property(x => x.TypeCode).HasColumnName("TYPE").HasMaxLength(2);
+            e.Property(x => x.TypeDescription).HasColumnName("TYPEDES").HasMaxLength(50);
         });
     }
 }
