@@ -231,6 +231,16 @@ public class AccdbToSqliteMigrationService
         return null;
     }
 
+    private static Core.Entities.JurisdictionCode? ParseJurisdictionCode(string? val)
+        => val?.ToUpperInvariant() switch
+        {
+            "STE" => Core.Entities.JurisdictionCode.STE,
+            "SUP" => Core.Entities.JurisdictionCode.SUP,
+            "MAG" => Core.Entities.JurisdictionCode.MAG,
+            "JUV" => Core.Entities.JurisdictionCode.JUV,
+            _ => null
+        };
+
     // ─── Table migrators ─────────────────────────────────────────────────────
 
     private void MigrateDefendant()
@@ -913,14 +923,16 @@ public class AccdbToSqliteMigrationService
             {
                 var e = new Warrant
                 {
-                    WarrantCounter = GetInt32(rs, "WarrantCounter"),
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
                     ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
                     WarrantNumber = GetString(rs, "WarrantNumber", 20),
                     CaseNumber = GetString(rs, "CaseNumber", 20),
-                    JurisdictionCode = GetString(rs, "JurisdictionCode", 20),
-                    BondAmt = GetDoubleNullable(rs, "BondAmt"),
+                    Date = GetDateTime(rs, "Date"),
+                    ArrestDate = GetDateTime(rs, "ArrestDate"),
+                    JurisdictionCode = ParseJurisdictionCode(GetString(rs, "JurisdictionCode", 20)),
+                    BondType = GetString(rs, "BondType", 20),
+                    BondAmt = (decimal?)GetDoubleNullable(rs, "BondAmt"),
                     Jail = GetBool(rs, "Jail"),
+                    AddOnCase = GetString(rs, "AddOnCase", 20),
                 };
                 db.Warrants.Add(e);
                 rs.MoveNext();
@@ -948,10 +960,8 @@ public class AccdbToSqliteMigrationService
             {
                 var e = new Appointment
                 {
-                    ApptCounter = GetInt32(rs, "ApptCounter"),
-                    DefendantId = GetString(rs, "DefendantID", 9) ?? "",
                     ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
-                    AttorneyId = GetString(rs, "AttorneyID", 10),
+                    AttyCode = GetString(rs, "AttyCode", 10) ?? "",
                     Date = GetDateTime(rs, "Date"),
                     Action = GetString(rs, "Action", 20),
                     DateSigned = GetDateTime(rs, "DateSigned"),
