@@ -552,11 +552,17 @@ public class AccdbToSqliteMigrationService
     private void MigrateEIA(OleDbDataReader r)
     {
         using var db = new PdTrackerDbContext(MakeOpts(_sqlitePath).Options);
+        // Build lookup: ApplicationNumber → DefendantId from already-migrated DEFENDANT table
+        var defendantLookup = db.Defendants
+            .ToDictionary(d => d.ApplicationNumber, d => d.DefendantId);
+
         while (r.Read())
         {
+            var appNum = GetInt32(r, "ApplicationNumber");
             var e = new EIA
             {
-                ApplicationNumber = GetInt32(r, "ApplicationNumber"),
+                ApplicationNumber = appNum,
+                DefendantId = defendantLookup.GetValueOrDefault(appNum),
                 Judge = GetString(r, "Judge", 50),
                 EIAResult = GetString(r, "EIAResult", 50),
                 Jail = GetString(r, "jail", 50),

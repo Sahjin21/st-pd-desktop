@@ -3,6 +3,7 @@ namespace PdTracker.Core.Entities;
 public class EIA : Entity
 {
     public int ApplicationNumber { get; set; }
+    public string? DefendantId { get; set; } // FK → Defendant.DefendantId, populated via ApplicationNumber lookup
     public string? Judge { get; set; }
     public string? EIAResult { get; set; }
     public string? Jail { get; set; }

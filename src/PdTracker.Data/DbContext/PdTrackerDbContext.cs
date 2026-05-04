@@ -486,7 +486,7 @@ public class PdTrackerDbContext : Microsoft.EntityFrameworkCore.DbContext
 
             e.HasOne(x => x.Defendant)
                 .WithOne(d => d.EIA)
-                .HasForeignKey<EIA>(x => x.ApplicationNumber).HasPrincipalKey(nameof(Defendant.ApplicationNumber));
+                .HasForeignKey<EIA>(x => x.DefendantId);
         });
 
         // Lookups
