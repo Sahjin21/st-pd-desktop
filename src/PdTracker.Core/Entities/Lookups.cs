@@ -39,12 +39,6 @@ public class IncomeSource : Entity
     public string? Description { get; set; }
 }
 
-public class Type : Entity
-{
-    public string TypeCode { get; set; } = string.Empty;
-    public string? TypeDescription { get; set; }
-}
-
 /// <summary>
 /// Generic catch-all lookup table for migrated reference data.
 /// </summary>

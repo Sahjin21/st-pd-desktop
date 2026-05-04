@@ -231,18 +231,6 @@ public class AccdbToSqliteMigrationService
         return null;
     }
 
-    private static Core.Entities.Type? ParseTypeEnum(string? val)
-    {
-        if (string.IsNullOrEmpty(val)) return null;
-        return val.ToUpperInvariant() switch
-        {
-            "F" => Core.Entities.Type.F,
-            "M" => Core.Entities.Type.M,
-            "O" => Core.Entities.Type.O,
-            _ => null
-        };
-    }
-
     // ─── Table migrators ─────────────────────────────────────────────────────
 
     private void MigrateDefendant()
@@ -1042,8 +1030,8 @@ public class AccdbToSqliteMigrationService
                 {
                     DefendantId = GetString(rs, "DefendantID", 9) ?? "",
                     ApplicationNumber = GetInt32(rs, "ApplicationNumber"),
-                    Type = ParseTypeEnum(GetString(rs, "Type")),
-                    ApplicationType = ParseTypeEnum(GetString(rs, "ApplicationType")),
+                    Type = GetString(rs, "Type"),
+                    ApplicationType = GetString(rs, "ApplicationType"),
                 };
                 db.EIAs.Add(e);
                 rs.MoveNext();
