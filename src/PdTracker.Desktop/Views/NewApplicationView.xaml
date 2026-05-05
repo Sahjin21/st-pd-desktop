@@ -1,6 +1,8 @@
 <UserControl x:Class="PdTracker.Desktop.Views.NewApplicationView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="clr-namespace:PdTracker.Desktop.Converters"
+             xmlns:local="clr-namespace:PdTracker.Desktop.Converters">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -62,13 +64,16 @@
                         <DatePicker Grid.Row="3" Grid.Column="1" SelectedDate="{Binding Defendant.DOB}" Margin="0,4"/>
 
                         <TextBlock Grid.Row="3" Grid.Column="2" Text="Education" Margin="0,6"/>
-                        <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding Defendant.Education}" Margin="0,4"/>
+                        <TextBox Grid.Row="3" Grid.Column="3" Text="{Binding Defendant.Education}" Margin="0,4"
+                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource EducationSuggestions}"/>
 
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Race" Margin="0,6"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Defendant.Race}" Margin="0,4"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="{Binding Defendant.Race}" Margin="0,4"
+                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource RaceSuggestions}"/>
 
                         <TextBlock Grid.Row="4" Grid.Column="2" Text="Sex" Margin="0,6"/>
-                        <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding Defendant.Sex}" Margin="0,4"/>
+                        <TextBox Grid.Row="4" Grid.Column="3" Text="{Binding Defendant.Sex}" Margin="0,4"
+                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource SexSuggestions}"/>
 
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="SOID" Margin="0,6"/>
                         <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Defendant.SOID}" Margin="0,4"/>
@@ -108,7 +113,8 @@
                                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding City}" Margin="0,2"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="State" Margin="0,4"/>
-                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding State}" Width="60" HorizontalAlignment="Left" Margin="0,2"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding State}" Width="60" HorizontalAlignment="Left" Margin="0,2"
+                                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource StateSuggestions}"/>
 
                                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Zip" Margin="0,4"/>
                                         <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding ZipCode}" Width="120" HorizontalAlignment="Left" Margin="0,2"/>
@@ -164,7 +170,8 @@
                                         <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding CaseNumber}" Margin="0,2"/>
 
                                         <TextBlock Grid.Row="0" Grid.Column="2" Text="Charge Type" Margin="0,4"/>
-                                        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ChargeType}" Margin="0,2"/>
+                                        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ChargeType}" Margin="0,2"
+                                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource ChargeTypeSuggestions}"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Charge Date" Margin="0,4"/>
                                         <DatePicker Grid.Row="1" Grid.Column="1" SelectedDate="{Binding ChargeDate}" Margin="0,2"/>
@@ -212,7 +219,8 @@
                                         <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding PayAmt}" Margin="0,2"/>
 
                                         <TextBlock Grid.Row="1" Grid.Column="2" Text="Pay Period" Margin="0,4"/>
-                                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PayPeriod}" Margin="0,2"/>
+                                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding PayPeriod}" Margin="0,2"
+                                                 conv:AutoCompleteBehavior.Suggestions="{StaticResource PayPeriodSuggestions}"/>
 
                                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Time Employed" Margin="0,4"/>
                                         <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TimeEmployed}" Margin="0,2"/>
