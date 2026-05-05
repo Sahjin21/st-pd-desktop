@@ -13,6 +13,10 @@ public partial class AttorneyListView : UserControl
         {
             try { await vm.LoadAllAsync(); }
             catch { }
+
+            // If navigated via "Add Attorney", auto-open the add panel and clean up
+            if (App.ViewParameters.TryRemove("AddAttorney", out _))
+                vm.StartAddCommand.Execute(null);
         };
     }
 }

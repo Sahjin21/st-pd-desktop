@@ -24,7 +24,7 @@ public partial class MainWindow : Window
                 "SearchDefendant" => App.Services.GetService(typeof(DefendantSearchView)),
                 "NewApplication" => App.Services.GetService(typeof(NewApplicationView)),
                 "EditAttorney" => App.Services.GetService(typeof(AttorneyListView)),
-                "AddAttorney" => App.Services.GetService(typeof(AttorneyListView)),
+                "AddAttorney" => SetViewParameterAndNavigate("AddAttorney"),
                 "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchView)),
                 "DefendantAZ" => App.Services.GetService(typeof(DefendantAZView)),
                 _ => null
@@ -40,6 +40,12 @@ public partial class MainWindow : Window
                 TextWrapping = System.Windows.TextWrapping.Wrap
             };
         }
+    }
+
+    private object SetViewParameterAndNavigate(string key)
+    {
+        App.ViewParameters[key] = "true";
+        return App.Services.GetService(typeof(AttorneyListView))!;
     }
 
     private void About_Click(object sender, RoutedEventArgs e)

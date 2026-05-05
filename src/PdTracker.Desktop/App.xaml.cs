@@ -16,6 +16,13 @@ public partial class App : Application
     public static IServiceProvider Services { get; private set; } = null!;
 
     /// <summary>
+    /// Thread-safe dictionary for passing navigation intent to views.
+    /// E.g. "AddAttorney" → "true" tells AttorneyListView to open the add panel on load.
+    /// </summary>
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, string> ViewParameters { get; }
+        = new();
+
+    /// <summary>
     /// The currently active SQLite database path.
     /// </summary>
     public static string CurrentSqlitePath { get; private set; } = null!;
