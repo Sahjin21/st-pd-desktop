@@ -296,7 +296,7 @@ public static class AutoCompleteBehavior
                 Foreground = Brushes.Black,
                 ItemContainerStyle = new Style(typeof(ListBoxItem))
                 {
-                    Setters = { new Setter(PaddingProperty, new Thickness(6, 4, 6, 4)) }
+                    Setters = { new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)) }
                 }
             };
 
