@@ -1,8 +1,14 @@
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
 
-namespace PdTracker.Desktop.Converters;
+namespace PdTracker.Desktop.Converters
+{
 
 public class BoolToVisibilityConverter : IValueConverter
 {
@@ -77,31 +83,8 @@ public class NullToEnabledConverter : IValueConverter
         => throw new NotImplementedException();
 }
 
-namespace PdTracker.Desktop.Converters
-{
-    using System.Collections.Specialized;
-    using System.Windows.Controls;
-    using System.Windows.Input;
-    using System.Windows.Media;
-    using System.Windows;
-    using System.Windows.Controls.Primitives;
-
-    // ============================================================
-    // AutoComplete Behavior — attached property for TextBox autofill
-    //
-    // Two modes:
-    //   Suggestions      — string[] (static XAML resource, e.g. StaticResource RaceSuggestions)
-    //   SuggestionSource — IEnumerable<string>, ideally ObservableCollection<string>
-    //                      (live DB-driven; subscribes to CollectionChanged for live refresh)
-    //
-    // Usage (static):
-    //   <TextBox conv:AutoCompleteBehavior.Suggestions="{StaticResource RaceSuggestions}"/>
-    //
-    // Usage (dynamic DB-driven):
-    //   <TextBox conv:AutoCompleteBehavior.SuggestionSource="{Binding RaceSuggestions}"/>
-    // ============================================================
-    public static class AutoCompleteBehavior
-    {
+// ============================================================
+// AutoComplete Behavior — attached property for TextBox autofill
 
         // --- Attached Properties ---
 
