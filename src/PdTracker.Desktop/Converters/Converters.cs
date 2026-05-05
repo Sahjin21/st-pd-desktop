@@ -85,8 +85,22 @@ public class NullToEnabledConverter : IValueConverter
 
 // ============================================================
 // AutoComplete Behavior — attached property for TextBox autofill
+//
+// Two modes:
+//   Suggestions      — string[] (static XAML resource, e.g. StaticResource RaceSuggestions)
+//   SuggestionSource — IEnumerable<string>, ideally ObservableCollection<string>
+//                      (live DB-driven; subscribes to CollectionChanged for live refresh)
+//
+// Usage (static):
+//   <TextBox conv:AutoCompleteBehavior.Suggestions="{StaticResource RaceSuggestions}"/>
+//
+// Usage (dynamic DB-driven):
+//   <TextBox conv:AutoCompleteBehavior.SuggestionSource="{Binding RaceSuggestions}"/>
+// ============================================================
+public static class AutoCompleteBehavior
+{
 
-        // --- Attached Properties ---
+    // --- Attached Properties ---
 
         // Static string[] source (e.g. declared as x:Array in App.xaml)
         public static readonly DependencyProperty SuggestionsProperty =
