@@ -79,6 +79,7 @@ public class NullToEnabledConverter : IValueConverter
 
 namespace PdTracker.Desktop.Converters
 {
+    using System.Collections.Specialized;
     using System.Windows.Controls;
     using System.Windows.Input;
     using System.Windows.Media;
@@ -87,41 +88,24 @@ namespace PdTracker.Desktop.Converters
 
     // ============================================================
     // AutoComplete Behavior — attached property for TextBox autofill
-    // Usage: <TextBox Text="{Binding SomeField}" conv:AutoCompleteBehavior.Suggestions="{StaticResource RaceSuggestions}"/>
+    //
+    // Two modes:
+    //   Suggestions      — string[] (static XAML resource, e.g. StaticResource RaceSuggestions)
+    //   SuggestionSource — IEnumerable<string>, ideally ObservableCollection<string>
+    //                      (live DB-driven; subscribes to CollectionChanged for live refresh)
+    //
+    // Usage (static):
+    //   <TextBox conv:AutoCompleteBehavior.Suggestions="{StaticResource RaceSuggestions}"/>
+    //
+    // Usage (dynamic DB-driven):
+    //   <TextBox conv:AutoCompleteBehavior.SuggestionSource="{Binding RaceSuggestions}"/>
     // ============================================================
     public static class AutoCompleteBehavior
     {
-        // Static suggestion lists for common fields (no persistence — just helpful defaults)
-        public static readonly string[] RaceSuggestions = new[]
-        {
-            "White", "Black or African American", "Asian", "Hispanic or Latino",
-            "American Indian or Alaska Native", "Native Hawaiian or Other Pacific Islander", "Two or More Races", "Other"
-        };
-
-        public static readonly string[] SexSuggestions = new[] { "M", "F", "Male", "Female" };
-
-        public static readonly string[] EducationSuggestions = new[]
-        {
-            "Less than High School", "Some High School", "High School Graduate / GED",
-            "Some College", "Associate Degree", "Bachelor's Degree", "Graduate Degree", "Vocational Training"
-        };
-
-        public static readonly string[] StateSuggestions = new[] { "GA", "AL", "FL", "TN", "NC", "SC", "VA", "WV", "KY" };
-
-        public static readonly string[] ChargeTypeSuggestions = new[]
-        {
-            "Misdemeanor", "Felony", "Traffic Violation", "DUI/DWI", "Drug Offense",
-            "Violent Crime", "Property Crime", "Weapon Offense", "Probation Violation", "Other"
-        };
-
-        public static readonly string[] PayPeriodSuggestions = new[] { "Weekly", "Bi-Weekly", "Monthly", "Semi-Monthly", "Annually" };
-
-        public static readonly string[] PhoneTypeSuggestions = new[] { "Home", "Mobile", "Work", "Other" };
-
-        public static readonly string[] YesNoSuggestions = new[] { "Yes", "No" };
 
         // --- Attached Properties ---
 
+        // Static string[] source (e.g. declared as x:Array in App.xaml)
         public static readonly DependencyProperty SuggestionsProperty =
             DependencyProperty.RegisterAttached(
                 "Suggestions",
@@ -132,6 +116,21 @@ namespace PdTracker.Desktop.Converters
         public static string[] GetSuggestions(DependencyObject obj) => (string[])obj.GetValue(SuggestionsProperty);
         public static void SetSuggestions(DependencyObject obj, string[] value) => obj.SetValue(SuggestionsProperty, value);
 
+        // Dynamic IEnumerable<string> source (e.g. ObservableCollection<string> from DB query).
+        // Supports INotifyCollectionChanged for live updates when the collection changes.
+        public static readonly DependencyProperty SuggestionSourceProperty =
+            DependencyProperty.RegisterAttached(
+                "SuggestionSource",
+                typeof(IEnumerable<string>),
+                typeof(AutoCompleteBehavior),
+                new PropertyMetadata(null, OnSuggestionSourceChanged));
+
+        public static IEnumerable<string> GetSuggestionSource(DependencyObject obj)
+            => (IEnumerable<string>)obj.GetValue(SuggestionSourceProperty);
+        public static void SetSuggestionSource(DependencyObject obj, IEnumerable<string> value)
+            => obj.SetValue(SuggestionSourceProperty, value);
+
+        // Convenience: enable autocomplete on a TextBox with no predefined source
         public static readonly DependencyProperty IsAutoCompleteEnabledProperty =
             DependencyProperty.RegisterAttached(
                 "IsAutoCompleteEnabled",
@@ -142,16 +141,26 @@ namespace PdTracker.Desktop.Converters
         public static bool GetIsAutoCompleteEnabled(DependencyObject obj) => (bool)obj.GetValue(IsAutoCompleteEnabledProperty);
         public static void SetIsAutoCompleteEnabled(DependencyObject obj, bool value) => obj.SetValue(IsAutoCompleteEnabledProperty, value);
 
-        // --- Internal state for popup ---
+        // --- Internal state (one active popup at a time) ---
         private static Popup? _activePopup;
         private static ListBox? _activeListBox;
-        private static string[]? _activeSuggestions;
+        private static IEnumerable<string>? _activeSuggestions;
         private static TextBox? _associatedTextBox;
+
+        // -------------------------------------------------------
+        // Property changed callbacks
+        // -------------------------------------------------------
 
         private static void OnSuggestionsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (d is TextBox tb && e.NewValue is string[] suggestions)
-                AttachAutoComplete(tb, suggestions);
+            if (d is TextBox tb && e.NewValue is string[] arr)
+                AttachAutoComplete(tb, arr);
+        }
+
+        private static void OnSuggestionSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is TextBox tb && e.NewValue is IEnumerable<string> src)
+                AttachAutoComplete(tb, src);
         }
 
         private static void OnAutoCompleteEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -160,14 +169,29 @@ namespace PdTracker.Desktop.Converters
                 AttachAutoComplete(tb, null);
         }
 
-        private static void AttachAutoComplete(TextBox textBox, string[]? suggestions)
+        // -------------------------------------------------------
+        // Core attach — handles both string[] and IEnumerable<string>
+        // -------------------------------------------------------
+
+        private static void AttachAutoComplete(TextBox textBox, IEnumerable<string>? source)
         {
-            // Guard: only attach once per TextBox instance
             if (textBox.Tag is bool alreadyAttached && alreadyAttached)
                 return;
             textBox.Tag = true;
 
-            _activeSuggestions = suggestions;
+            _activeSuggestions = source;
+
+            // Subscribe to CollectionChanged if it's an ObservableCollection (live DB updates)
+            if (source is System.Collections.Specialized.INotifyCollectionChanged observable)
+            {
+                observable.CollectionChanged += (s, args) =>
+                {
+                    if (string.IsNullOrEmpty(textBox.Text))
+                        ClosePopup();
+                    else
+                        RefreshPopup(textBox);
+                };
+            }
 
             textBox.TextChanged += (s, args) =>
             {
@@ -179,8 +203,9 @@ namespace PdTracker.Desktop.Converters
                 }
 
                 var matches = _activeSuggestions
-                    .Where(x => x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
-                                x.Contains(typed, StringComparison.OrdinalIgnoreCase))
+                    .Where(x => !string.IsNullOrEmpty(x) &&
+                                (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
+                                 x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
                     .Take(8)
                     .ToList();
 
@@ -190,7 +215,7 @@ namespace PdTracker.Desktop.Converters
                     return;
                 }
 
-                ShowPopup(textBox, matches, suggestions!);
+                ShowPopup(textBox, matches);
             };
 
             textBox.PreviewKeyDown += (s, args) =>
@@ -233,7 +258,6 @@ namespace PdTracker.Desktop.Converters
 
             textBox.LostFocus += (s, args) =>
             {
-                // Delay so click on popup item registers first
                 Task.Delay(150).ContinueWith(_ =>
                 {
                     textBox.Dispatcher.Invoke(() => ClosePopup());
@@ -241,10 +265,28 @@ namespace PdTracker.Desktop.Converters
             };
         }
 
-        private static void ShowPopup(TextBox anchor, List<string> items, string[] allSuggestions)
+        private static void RefreshPopup(TextBox textBox)
+        {
+            if (_activeSuggestions == null) return;
+            string typed = textBox.Text.Trim();
+            if (string.IsNullOrEmpty(typed)) { ClosePopup(); return; }
+
+            var matches = _activeSuggestions
+                .Where(x => !string.IsNullOrEmpty(x) &&
+                            (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
+                             x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
+                .Take(8)
+                .ToList();
+
+            if (matches.Count == 0)
+                ClosePopup();
+            else
+                ShowPopup(textBox, matches);
+        }
+
+        private static void ShowPopup(TextBox anchor, List<string> items)
         {
             ClosePopup();
-            _activeSuggestions = allSuggestions;
 
             var listBox = new ListBox
             {
@@ -273,7 +315,7 @@ namespace PdTracker.Desktop.Converters
             {
                 if (listBox.SelectedItem != null && _associatedTextBox != null)
                 {
-                    _associatedTextBox.Text = listBox.SelectedItem.ToString();
+                    _associatedTextBox.Text = listBox.SelectedItem.ToString()!;
                     _associatedTextBox.CaretIndex = _associatedTextBox.Text.Length;
                 }
             };
@@ -282,7 +324,7 @@ namespace PdTracker.Desktop.Converters
             {
                 if (listBox.SelectedItem != null && _associatedTextBox != null)
                 {
-                    _associatedTextBox.Text = listBox.SelectedItem.ToString();
+                    _associatedTextBox.Text = listBox.SelectedItem.ToString()!;
                     _associatedTextBox.CaretIndex = _associatedTextBox.Text.Length;
                     ClosePopup();
                 }

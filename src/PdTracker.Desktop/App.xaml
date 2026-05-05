@@ -1,76 +1,12 @@
 <Application x:Class="PdTracker.Desktop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:conv="clr-namespace:PdTracker.Desktop.Converters">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Resources/DefaultTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
-
-            <!-- Autofill Suggestion Arrays (no persistence — static hints only) -->
-            <x:Array x:Key="RaceSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>White</sys:String>
-                <sys:String>Black or African American</sys:String>
-                <sys:String>Asian</sys:String>
-                <sys:String>Hispanic or Latino</sys:String>
-                <sys:String>American Indian or Alaska Native</sys:String>
-                <sys:String>Native Hawaiian or Other Pacific Islander</sys:String>
-                <sys:String>Two or More Races</sys:String>
-                <sys:String>Other</sys:String>
-            </x:Array>
-
-            <x:Array x:Key="SexSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>M</sys:String>
-                <sys:String>F</sys:String>
-                <sys:String>Male</sys:String>
-                <sys:String>Female</sys:String>
-            </x:Array>
-
-            <x:Array x:Key="EducationSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>Less than High School</sys:String>
-                <sys:String>Some High School</sys:String>
-                <sys:String>High School Graduate / GED</sys:String>
-                <sys:String>Some College</sys:String>
-                <sys:String>Associate Degree</sys:String>
-                <sys:String>Bachelor's Degree</sys:String>
-                <sys:String>Graduate Degree</sys:String>
-                <sys:String>Vocational Training</sys:String>
-            </x:Array>
-
-            <x:Array x:Key="StateSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>GA</sys:String>
-                <sys:String>AL</sys:String>
-                <sys:String>FL</sys:String>
-                <sys:String>TN</sys:String>
-                <sys:String>NC</sys:String>
-                <sys:String>SC</sys:String>
-                <sys:String>VA</sys:String>
-                <sys:String>WV</sys:String>
-                <sys:String>KY</sys:String>
-            </x:Array>
-
-            <x:Array x:Key="ChargeTypeSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>Misdemeanor</sys:String>
-                <sys:String>Felony</sys:String>
-                <sys:String>Traffic Violation</sys:String>
-                <sys:String>DUI/DWI</sys:String>
-                <sys:String>Drug Offense</sys:String>
-                <sys:String>Violent Crime</sys:String>
-                <sys:String>Property Crime</sys:String>
-                <sys:String>Weapon Offense</sys:String>
-                <sys:String>Probation Violation</sys:String>
-                <sys:String>Other</sys:String>
-            </x:Array>
-
-            <x:Array x:Key="PayPeriodSuggestions" Type="sys:String" xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                <sys:String>Weekly</sys:String>
-                <sys:String>Bi-Weekly</sys:String>
-                <sys:String>Monthly</sys:String>
-                <sys:String>Semi-Monthly</sys:String>
-                <sys:String>Annually</sys:String>
-            </x:Array>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

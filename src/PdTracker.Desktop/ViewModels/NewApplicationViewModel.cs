@@ -31,6 +31,14 @@ public partial class NewApplicationViewModel : ObservableObject
     [ObservableProperty] bool _military;
     [ObservableProperty] ObservableCollection<Dependent> _juvenileInfo = new();
 
+    // DB-driven autofill suggestion sources (distinct values per field)
+    [ObservableProperty] ObservableCollection<string> _raceSuggestions = new();
+    [ObservableProperty] ObservableCollection<string> _sexSuggestions = new();
+    [ObservableProperty] ObservableCollection<string> _educationSuggestions = new();
+    [ObservableProperty] ObservableCollection<string> _stateSuggestions = new();
+    [ObservableProperty] ObservableCollection<string> _chargeTypeSuggestions = new();
+    [ObservableProperty] ObservableCollection<string> _payPeriodSuggestions = new();
+
     public string[] StepTitles => new[]
     {
         "Personal", "Address / Phone", "Charges", "Financial",
@@ -45,6 +53,73 @@ public partial class NewApplicationViewModel : ObservableObject
         Charges.Add(new Charge());
         Employers.Add(new FinEmployer());
         JuvenileInfo.Add(new Dependent());
+
+        // Load autofill suggestions from DB (distinct values already stored)
+        _ = LoadSuggestionSourcesAsync();
+    }
+
+    /// <summary>
+    /// Loads distinct values for each autofill field from the live database.
+    /// Collections are ObservableCollection so any live popup refreshes automatically.
+    /// </summary>
+    private async Task LoadSuggestionSourcesAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            RaceSuggestions = new ObservableCollection<string>(
+                await db.Defendants
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Race))
+                    .Select(d => d.Race!)
+                    .Distinct()
+                    .OrderBy(r => r)
+                    .ToListAsync());
+
+            SexSuggestions = new ObservableCollection<string>(
+                await db.Defendants
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Sex))
+                    .Select(d => d.Sex!)
+                    .Distinct()
+                    .OrderBy(s => s)
+                    .ToListAsync());
+
+            EducationSuggestions = new ObservableCollection<string>(
+                await db.Defendants
+                    .Where(d => !string.IsNullOrWhiteSpace(d.Education))
+                    .Select(d => d.Education!)
+                    .Distinct()
+                    .OrderBy(e => e)
+                    .ToListAsync());
+
+            StateSuggestions = new ObservableCollection<string>(
+                await db.DefAddresses
+                    .Where(a => !string.IsNullOrWhiteSpace(a.State))
+                    .Select(a => a.State!)
+                    .Distinct()
+                    .OrderBy(s => s)
+                    .ToListAsync());
+
+            ChargeTypeSuggestions = new ObservableCollection<string>(
+                await db.Charges
+                    .Where(c => !string.IsNullOrWhiteSpace(c.ChargeType))
+                    .Select(c => c.ChargeType!)
+                    .Distinct()
+                    .OrderBy(ct => ct)
+                    .ToListAsync());
+
+            PayPeriodSuggestions = new ObservableCollection<string>(
+                await db.FinEmployers
+                    .Where(e => !string.IsNullOrWhiteSpace(e.PayPeriod))
+                    .Select(e => e.PayPeriod!)
+                    .Distinct()
+                    .OrderBy(p => p)
+                    .ToListAsync());
+        }
+        catch
+        {
+            // Non-fatal: suggestions just won't appear if DB query fails
+        }
     }
 
     [RelayCommand]
