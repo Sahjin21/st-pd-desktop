@@ -300,18 +300,20 @@ public static class AutoCompleteBehavior
             List<string> matches;
             if (string.IsNullOrEmpty(typed))
             {
-                // No typed text — show all available suggestions (e.g. suggestions loaded after attachment)
+                // No typed text — show all available suggestions (alphabetical, up to 8)
                 matches = _activeSuggestions
                     .Where(x => !string.IsNullOrEmpty(x))
+                    .OrderBy(x => x)
                     .Take(8)
                     .ToList();
             }
             else
             {
+                // Only StartsWith — no Contains (typing "a" must not show "chad")
                 matches = _activeSuggestions
                     .Where(x => !string.IsNullOrEmpty(x) &&
-                                (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
-                                 x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
+                                x.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x)
                     .Take(8)
                     .ToList();
             }
@@ -379,8 +381,15 @@ public static class AutoCompleteBehavior
             {
                 if (listBox.SelectedItem != null && _associatedTextBox != null)
                 {
-                    _associatedTextBox.Text = listBox.SelectedItem.ToString()!;
-                    _associatedTextBox.CaretIndex = _associatedTextBox.Text.Length;
+                    string selected = listBox.SelectedItem.ToString()!;
+                    _associatedTextBox.Text = selected;
+                    _associatedTextBox.CaretIndex = selected.Length;
+
+                    // Push the value into the binding source so the ViewModel property updates.
+                    // TextBox.Text set programmatically does NOT auto-push to the binding source.
+                    var be = _associatedTextBox.GetBindingExpression(TextBox.TextProperty);
+                    be?.UpdateSource();
+
                     ClosePopup();
                 }
             };

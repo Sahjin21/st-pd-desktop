@@ -134,11 +134,10 @@ public partial class DefendantSearchViewModel : ObservableObject
 
         if (string.IsNullOrEmpty(chosenLast))
         {
-            // No last name chosen — show all first names that match the typed fragment
+            // No last name chosen — show all first names starting with typed fragment (no Contains)
             foreach (var fn in FirstNameSuggestions
                 .Where(f => string.IsNullOrEmpty(typedFirst) ||
-                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase) ||
-                            f.Contains(typedFirst, StringComparison.OrdinalIgnoreCase)))
+                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase)))
                 FilteredFirstNameSuggestions.Add(fn);
         }
         else
@@ -156,8 +155,7 @@ public partial class DefendantSearchViewModel : ObservableObject
 
             foreach (var fn in validFirstNames
                 .Where(f => string.IsNullOrEmpty(typedFirst) ||
-                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase) ||
-                            f.Contains(typedFirst, StringComparison.OrdinalIgnoreCase)))
+                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase)))
                 FilteredFirstNameSuggestions.Add(fn);
         }
     }
@@ -168,11 +166,10 @@ public partial class DefendantSearchViewModel : ObservableObject
 
         if (string.IsNullOrEmpty(chosenFirst))
         {
-            // No first name filter — show all last names matching the typed fragment
+            // No first name filter — show all last names starting with typed fragment (no Contains)
             foreach (var ln in LastNameSuggestions
                 .Where(f => string.IsNullOrEmpty(typedLast) ||
-                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
-                            f.Contains(typedLast, StringComparison.OrdinalIgnoreCase)))
+                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase)))
                 FilteredLastNameSuggestions.Add(ln);
         }
         else
@@ -190,8 +187,7 @@ public partial class DefendantSearchViewModel : ObservableObject
 
             foreach (var ln in validLastNames
                 .Where(f => string.IsNullOrEmpty(typedLast) ||
-                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
-                            f.Contains(typedLast, StringComparison.OrdinalIgnoreCase)))
+                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase)))
                 FilteredLastNameSuggestions.Add(ln);
         }
     }
