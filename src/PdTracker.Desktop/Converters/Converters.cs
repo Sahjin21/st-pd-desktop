@@ -183,10 +183,21 @@ public static class AutoCompleteBehavior
             {
                 observable.CollectionChanged += (s, args) =>
                 {
-                    if (string.IsNullOrEmpty(textBox.Text))
-                        ClosePopup();
-                    else
-                        RefreshPopup(textBox);
+                    // When suggestions load (after the behavior attached), show them immediately
+                    // without requiring an extra keystroke.
+                    if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add ||
+                        args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Replace)
+                    {
+                        if (!string.IsNullOrEmpty(textBox.Text))
+                            RefreshPopup(textBox);
+                        else if (args.NewItems != null && args.NewItems.Count > 0 && _activeSuggestions != null)
+                            RefreshPopup(textBox);
+                    }
+                    else if (args.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+                    {
+                        if (!string.IsNullOrEmpty(textBox.Text))
+                            RefreshPopup(textBox);
+                    }
                 };
             }
 
@@ -266,14 +277,25 @@ public static class AutoCompleteBehavior
         {
             if (_activeSuggestions == null) return;
             string typed = textBox.Text.Trim();
-            if (string.IsNullOrEmpty(typed)) { ClosePopup(); return; }
 
-            var matches = _activeSuggestions
-                .Where(x => !string.IsNullOrEmpty(x) &&
-                            (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
-                             x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
-                .Take(8)
-                .ToList();
+            List<string> matches;
+            if (string.IsNullOrEmpty(typed))
+            {
+                // No typed text — show all available suggestions (e.g. suggestions loaded after attachment)
+                matches = _activeSuggestions
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .Take(8)
+                    .ToList();
+            }
+            else
+            {
+                matches = _activeSuggestions
+                    .Where(x => !string.IsNullOrEmpty(x) &&
+                                (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
+                                 x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
+                    .Take(8)
+                    .ToList();
+            }
 
             if (matches.Count == 0)
                 ClosePopup();

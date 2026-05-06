@@ -95,7 +95,9 @@ public partial class DefendantSearchViewModel : ObservableObject
             foreach (var n in firstNames) FirstNameSuggestions.Add(n);
             foreach (var s in soids) SoidSuggestions.Add(s);
 
-            // Seed filtered collections with everything initially
+            // Seed filtered collections with all names initially (before user types anything)
+            FilteredFirstNameSuggestions.Clear();
+            FilteredLastNameSuggestions.Clear();
             foreach (var fn in firstNames) FilteredFirstNameSuggestions.Add(fn);
             foreach (var ln in lastNames) FilteredLastNameSuggestions.Add(ln);
         }
@@ -119,6 +121,12 @@ public partial class DefendantSearchViewModel : ObservableObject
     private void FilterFirstNameSuggestions(string typedFirst, string chosenLast)
     {
         FilteredFirstNameSuggestions.Clear();
+
+        // Use _allDefendants if available, otherwise fall back to LastNameSuggestions for the name list
+        IEnumerable<Defendant> source = _allDefendants.Count > 0
+            ? _allDefendants
+            : LastNameSuggestions.Select(ln => new Defendant { LastName = ln }); // dummy source with last names
+
         if (string.IsNullOrEmpty(chosenLast))
         {
             // No last name chosen — show all first names that match the typed fragment
@@ -131,13 +139,16 @@ public partial class DefendantSearchViewModel : ObservableObject
         else
         {
             // Last name is chosen — only show first names that appear with that last name
-            var validFirstNames = _allDefendants
-                .Where(d => d.LastName != null &&
-                            d.LastName.Equals(chosenLast, StringComparison.OrdinalIgnoreCase) &&
-                            !string.IsNullOrEmpty(d.FirstName))
-                .Select(d => d.FirstName!)
-                .Distinct()
-                .OrderBy(f => f);
+            var validFirstNames = _allDefendants.Count > 0
+                ? _allDefendants
+                    .Where(d => d.LastName != null &&
+                                d.LastName.Equals(chosenLast, StringComparison.OrdinalIgnoreCase) &&
+                                !string.IsNullOrEmpty(d.FirstName))
+                    .Select(d => d.FirstName!)
+                    .Distinct()
+                    .OrderBy(f => f)
+                : Enumerable.Empty<string>();
+
             foreach (var fn in validFirstNames
                 .Where(f => string.IsNullOrEmpty(typedFirst) ||
                             f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase) ||
@@ -149,8 +160,10 @@ public partial class DefendantSearchViewModel : ObservableObject
     private void FilterLastNameSuggestions(string typedLast, string chosenFirst)
     {
         FilteredLastNameSuggestions.Clear();
+
         if (string.IsNullOrEmpty(chosenFirst))
         {
+            // No first name filter — show all last names matching the typed fragment
             foreach (var ln in LastNameSuggestions
                 .Where(f => string.IsNullOrEmpty(typedLast) ||
                             f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
@@ -159,13 +172,17 @@ public partial class DefendantSearchViewModel : ObservableObject
         }
         else
         {
-            var validLastNames = _allDefendants
-                .Where(d => d.FirstName != null &&
-                            d.FirstName.Equals(chosenFirst, StringComparison.OrdinalIgnoreCase) &&
-                            !string.IsNullOrEmpty(d.LastName))
-                .Select(d => d.LastName!)
-                .Distinct()
-                .OrderBy(l => l);
+            // First name is chosen — only show last names that appear with that first name
+            var validLastNames = _allDefendants.Count > 0
+                ? _allDefendants
+                    .Where(d => d.FirstName != null &&
+                                d.FirstName.Equals(chosenFirst, StringComparison.OrdinalIgnoreCase) &&
+                                !string.IsNullOrEmpty(d.LastName))
+                    .Select(d => d.LastName!)
+                    .Distinct()
+                    .OrderBy(l => l)
+                : Enumerable.Empty<string>();
+
             foreach (var ln in validLastNames
                 .Where(f => string.IsNullOrEmpty(typedLast) ||
                             f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
