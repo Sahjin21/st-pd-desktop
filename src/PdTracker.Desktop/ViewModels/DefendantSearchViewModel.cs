@@ -24,10 +24,17 @@ public partial class DefendantSearchViewModel : ObservableObject
 
     public ObservableCollection<Defendant> Results { get; } = new();
 
-    // Autocomplete suggestion sources — loaded once, updated live
+    // Full autocomplete suggestion sources — loaded once from DB
     public ObservableCollection<string> LastNameSuggestions { get; } = new();
     public ObservableCollection<string> FirstNameSuggestions { get; } = new();
     public ObservableCollection<string> SoidSuggestions { get; } = new();
+
+    // Filtered sources — cascade: first name filtered by chosen last name, and vice versa
+    public ObservableCollection<string> FilteredFirstNameSuggestions { get; } = new();
+    public ObservableCollection<string> FilteredLastNameSuggestions { get; } = new();
+
+    // All defendants cached for cascade filtering (loaded once)
+    private List<Defendant> _allDefendants = new();
 
     // Tab sub-ViewModels
     public AppointInfoViewModel AppointInfoVm { get; }
@@ -47,7 +54,8 @@ public partial class DefendantSearchViewModel : ObservableObject
     {
         SearchMode = mode;
         IsReadOnly = mode == "ReadOnly";
-        ShowSoidField = mode == "ReadOnly" || mode == "Juvenile";
+        // SOID field only for "Search by Booking#" (ReadOnly). Juvenile is same as name search.
+        ShowSoidField = mode == "ReadOnly";
     }
 
     private async Task LoadSuggestionsAsync()
@@ -55,24 +63,30 @@ public partial class DefendantSearchViewModel : ObservableObject
         try
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
-            var lastNames = await db.Defendants
+            var defendants = await db.Defendants
+                .Where(d => !string.IsNullOrWhiteSpace(d.LastName))
+                .Take(1000)
+                .ToListAsync();
+            _allDefendants = defendants;
+
+            var lastNames = defendants
                 .Where(d => !string.IsNullOrWhiteSpace(d.LastName))
                 .Select(d => d.LastName!)
                 .Distinct()
                 .OrderBy(n => n)
-                .ToListAsync();
-            var firstNames = await db.Defendants
+                .ToList();
+            var firstNames = defendants
                 .Where(d => !string.IsNullOrWhiteSpace(d.FirstName))
                 .Select(d => d.FirstName!)
                 .Distinct()
                 .OrderBy(n => n)
-                .ToListAsync();
-            var soids = await db.Defendants
+                .ToList();
+            var soids = defendants
                 .Where(d => !string.IsNullOrWhiteSpace(d.SOID))
                 .Select(d => d.SOID!)
                 .Distinct()
                 .OrderBy(s => s)
-                .ToListAsync();
+                .ToList();
 
             LastNameSuggestions.Clear();
             FirstNameSuggestions.Clear();
@@ -80,8 +94,84 @@ public partial class DefendantSearchViewModel : ObservableObject
             foreach (var n in lastNames) LastNameSuggestions.Add(n);
             foreach (var n in firstNames) FirstNameSuggestions.Add(n);
             foreach (var s in soids) SoidSuggestions.Add(s);
+
+            // Seed filtered collections with everything initially
+            foreach (var fn in firstNames) FilteredFirstNameSuggestions.Add(fn);
+            foreach (var ln in lastNames) FilteredLastNameSuggestions.Add(ln);
         }
         catch { /* non-fatal */ }
+    }
+
+    partial void OnLastNameSearchChanged(string value)
+    {
+        // When a last name is chosen from the dropdown, filter first names to only
+        // show first names that share that last name in the DB.
+        FilterFirstNameSuggestions(FirstNameSearch.Trim(), value.Trim());
+    }
+
+    partial void OnFirstNameSearchChanged(string value)
+    {
+        // When a first name is chosen from the dropdown, filter last names to only
+        // show last names that share that first name in the DB.
+        FilterLastNameSuggestions(LastNameSearch.Trim(), value.Trim());
+    }
+
+    private void FilterFirstNameSuggestions(string typedFirst, string chosenLast)
+    {
+        FilteredFirstNameSuggestions.Clear();
+        if (string.IsNullOrEmpty(chosenLast))
+        {
+            // No last name chosen — show all first names that match the typed fragment
+            foreach (var fn in FirstNameSuggestions
+                .Where(f => string.IsNullOrEmpty(typedFirst) ||
+                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase) ||
+                            f.Contains(typedFirst, StringComparison.OrdinalIgnoreCase)))
+                FilteredFirstNameSuggestions.Add(fn);
+        }
+        else
+        {
+            // Last name is chosen — only show first names that appear with that last name
+            var validFirstNames = _allDefendants
+                .Where(d => d.LastName != null &&
+                            d.LastName.Equals(chosenLast, StringComparison.OrdinalIgnoreCase) &&
+                            !string.IsNullOrEmpty(d.FirstName))
+                .Select(d => d.FirstName!)
+                .Distinct()
+                .OrderBy(f => f);
+            foreach (var fn in validFirstNames
+                .Where(f => string.IsNullOrEmpty(typedFirst) ||
+                            f.StartsWith(typedFirst, StringComparison.OrdinalIgnoreCase) ||
+                            f.Contains(typedFirst, StringComparison.OrdinalIgnoreCase)))
+                FilteredFirstNameSuggestions.Add(fn);
+        }
+    }
+
+    private void FilterLastNameSuggestions(string typedLast, string chosenFirst)
+    {
+        FilteredLastNameSuggestions.Clear();
+        if (string.IsNullOrEmpty(chosenFirst))
+        {
+            foreach (var ln in LastNameSuggestions
+                .Where(f => string.IsNullOrEmpty(typedLast) ||
+                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
+                            f.Contains(typedLast, StringComparison.OrdinalIgnoreCase)))
+                FilteredLastNameSuggestions.Add(ln);
+        }
+        else
+        {
+            var validLastNames = _allDefendants
+                .Where(d => d.FirstName != null &&
+                            d.FirstName.Equals(chosenFirst, StringComparison.OrdinalIgnoreCase) &&
+                            !string.IsNullOrEmpty(d.LastName))
+                .Select(d => d.LastName!)
+                .Distinct()
+                .OrderBy(l => l);
+            foreach (var ln in validLastNames
+                .Where(f => string.IsNullOrEmpty(typedLast) ||
+                            f.StartsWith(typedLast, StringComparison.OrdinalIgnoreCase) ||
+                            f.Contains(typedLast, StringComparison.OrdinalIgnoreCase)))
+                FilteredLastNameSuggestions.Add(ln);
+        }
     }
 
     [RelayCommand]

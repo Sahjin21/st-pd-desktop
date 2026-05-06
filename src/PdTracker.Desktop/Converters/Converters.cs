@@ -278,7 +278,24 @@ public static class AutoCompleteBehavior
             if (matches.Count == 0)
                 ClosePopup();
             else
-                ShowPopup(textBox, matches);
+                UpdatePopupList(textBox, matches);
+        }
+
+        private static void UpdatePopupList(TextBox anchor, List<string> items)
+        {
+            if (_activeListBox == null || _activePopup == null)
+            {
+                ShowPopup(anchor, items);
+                return;
+            }
+
+            // Update existing popup's items in place — don't close/reopen
+            _activeListBox.Items.Clear();
+            foreach (var item in items)
+                _activeListBox.Items.Add(item);
+
+            if (!_activePopup.IsOpen)
+                _activePopup.IsOpen = true;
         }
 
         private static void ShowPopup(TextBox anchor, List<string> items)
