@@ -18,6 +18,10 @@ public partial class DefendantSearchViewModel : ObservableObject
 
     public ObservableCollection<Defendant> Results { get; } = new();
 
+    // Autocomplete suggestion sources — loaded once, updated live
+    public ObservableCollection<string> LastNameSuggestions { get; } = new();
+    public ObservableCollection<string> FirstNameSuggestions { get; } = new();
+
     // Tab sub-ViewModels
     public AppointInfoViewModel AppointInfoVm { get; }
     public CourtInfoViewModel CourtInfoVm { get; }
@@ -29,6 +33,33 @@ public partial class DefendantSearchViewModel : ObservableObject
         AppointInfoVm = new AppointInfoViewModel(dbFactory);
         CourtInfoVm = new CourtInfoViewModel(dbFactory);
         CommentVm = new CommentViewModel(dbFactory);
+        _ = LoadSuggestionsAsync();
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var lastNames = await db.Defendants
+                .Where(d => !string.IsNullOrWhiteSpace(d.LastName))
+                .Select(d => d.LastName!)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+            var firstNames = await db.Defendants
+                .Where(d => !string.IsNullOrWhiteSpace(d.FirstName))
+                .Select(d => d.FirstName!)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+
+            LastNameSuggestions.Clear();
+            FirstNameSuggestions.Clear();
+            foreach (var n in lastNames) LastNameSuggestions.Add(n);
+            foreach (var n in firstNames) FirstNameSuggestions.Add(n);
+        }
+        catch { /* non-fatal */ }
     }
 
     [RelayCommand]

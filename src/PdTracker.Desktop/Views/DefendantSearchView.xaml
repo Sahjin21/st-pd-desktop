@@ -1,7 +1,8 @@
 <UserControl x:Class="PdTracker.Desktop.Views.DefendantSearchView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:PdTracker.Desktop.ViewModels">
+             xmlns:vm="clr-namespace:PdTracker.Desktop.ViewModels"
+             xmlns:conv="clr-namespace:PdTracker.Desktop.Converters">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -26,7 +27,8 @@
                         <TextBox Grid.Column="0"
                                  Text="{Binding LastNameSearch, UpdateSourceTrigger=PropertyChanged}"
                                  FontSize="14" Padding="10,8"
-                                 VerticalContentAlignment="Center">
+                                 VerticalContentAlignment="Center"
+                                 conv:AutoCompleteBehavior.SuggestionSource="{Binding LastNameSuggestions}">
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
                             </TextBox.InputBindings>
@@ -38,7 +40,8 @@
                         <TextBox Grid.Column="2"
                                  Text="{Binding FirstNameSearch, UpdateSourceTrigger=PropertyChanged}"
                                  FontSize="14" Padding="10,8"
-                                 VerticalContentAlignment="Center">
+                                 VerticalContentAlignment="Center"
+                                 conv:AutoCompleteBehavior.SuggestionSource="{Binding FirstNameSuggestions}">
                             <TextBox.InputBindings>
                                 <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
                             </TextBox.InputBindings>
