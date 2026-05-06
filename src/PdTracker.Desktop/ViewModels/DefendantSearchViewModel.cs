@@ -15,6 +15,10 @@ public partial class DefendantSearchViewModel : ObservableObject
     [ObservableProperty] string _firstNameSearch = string.Empty;
     [ObservableProperty] Defendant? _selectedDefendant;
     [ObservableProperty] int _selectedTabIndex;
+    [ObservableProperty] bool _isReadOnly;
+
+    /// <summary>Current search mode: Edit, ReadOnly, Juvenile. Defaults to Edit.</summary>
+    public string SearchMode { get; private set; } = "Edit";
 
     public ObservableCollection<Defendant> Results { get; } = new();
 
@@ -34,6 +38,12 @@ public partial class DefendantSearchViewModel : ObservableObject
         CourtInfoVm = new CourtInfoViewModel(dbFactory);
         CommentVm = new CommentViewModel(dbFactory);
         _ = LoadSuggestionsAsync();
+    }
+
+    public void SetSearchMode(string mode)
+    {
+        SearchMode = mode;
+        IsReadOnly = mode == "ReadOnly";
     }
 
     private async Task LoadSuggestionsAsync()

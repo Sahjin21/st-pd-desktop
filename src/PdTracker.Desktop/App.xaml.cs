@@ -277,6 +277,7 @@ public partial class App : Application
         services.AddTransient<AttorneyListViewModel>();
         services.AddTransient<VoucherSearchViewModel>();
         services.AddTransient<DefendantAZView>();
+        services.AddTransient<ApplicationMenuView>();
 
         services.AddTransient<DefendantSearchView>();
         services.AddTransient<NewApplicationView>();

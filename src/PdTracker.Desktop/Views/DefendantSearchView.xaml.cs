@@ -9,5 +9,11 @@ public partial class DefendantSearchView : UserControl
     {
         InitializeComponent();
         DataContext = vm;
+        Loaded += (_, _) =>
+        {
+            // Handle mode passed via navigation (Edit, ReadOnly, Juvenile, etc.)
+            if (App.ViewParameters.TryRemove("DefendantSearchMode", out var mode))
+                vm.SetSearchMode(mode);
+        };
     }
 }
