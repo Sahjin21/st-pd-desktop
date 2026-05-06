@@ -27,6 +27,16 @@ public partial class MainWindow : Window
                 "AddAttorney" => SetViewParameterAndNavigate("AddAttorney"),
                 "SearchVoucher" => App.Services.GetService(typeof(VoucherSearchView)),
                 "DefendantAZ" => App.Services.GetService(typeof(DefendantAZView)),
+                // Stubs — wire up real views when ready
+                "EditApplication" => MakeStub("Edit Application", "Open an existing application to review or update its details."),
+                "SearchByBooking" => App.Services.GetService(typeof(DefendantSearchView)),
+                "SearchChild" => MakeStub("Search Child", "Search for juvenile case records associated with a defendant."),
+                "ApplicationMenu" => MakeStub("Application Menu", "Manage application templates and settings."),
+                "DocumentMenu" => MakeStub("Document Menu", "Generate and manage legal documents."),
+                "Professional" => MakeStub("Professional", "Professional fee and voucher management."),
+                "ReportsMenu" => App.Services.GetService(typeof(DefendantSearchView)),
+                "AdministratorMenu" => MakeStub("Administrator Menu", "Administrative settings and user management."),
+                "CDNumberReverse" => MakeStub("CD Number Reverse Order", "View applications sorted by CD number in descending order."),
                 _ => null
             };
         }
@@ -56,4 +66,16 @@ public partial class MainWindow : Window
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
+
+    private static System.Windows.Controls.TextBlock MakeStub(string title, string description)
+        => new()
+        {
+            Text = $"{title}\n\n{description}\n\nThis feature is coming soon.",
+            FontSize = 16,
+            Foreground = System.Windows.Media.Brushes.Gray,
+            FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+            TextWrapping = System.Windows.TextWrapping.Wrap,
+            VerticalAlignment = System.Windows.VerticalAlignment.Top,
+            Margin = new Thickness(0, 20, 0, 0)
+        };
 }

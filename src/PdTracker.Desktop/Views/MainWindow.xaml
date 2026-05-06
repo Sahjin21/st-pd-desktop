@@ -50,41 +50,45 @@
             </MenuItem>
         </Menu>
 
-        <!-- Main Layout: Nav + Content -->
+        <!-- Main Layout: Left Nav + Content + Right Nav -->
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="220"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="220"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Left Navigation Panel -->
+            <!-- Left Navigation Panel: Common Functions -->
             <Border Grid.Column="0" Background="#1A3A5C">
                 <StackPanel Margin="10,20">
                     <TextBlock Text="PD Tracker"
                                FontSize="20" FontWeight="Bold"
                                Foreground="White" Margin="10,0,0,24"/>
 
-                    <Button Content="Search Defendant" Style="{StaticResource MenuButton}"
-                            Command="{Binding NavigateCommand}"
-                            CommandParameter="SearchDefendant"/>
                     <Button Content="New Application" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="NewApplication"/>
-                    <Button Content="Edit Attorney List" Style="{StaticResource MenuButton}"
+                    <Button Content="Search Defendant" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
-                            CommandParameter="EditAttorney"/>
-                    <Button Content="Add Attorney" Style="{StaticResource MenuButton}"
+                            CommandParameter="SearchDefendant"/>
+                    <Button Content="Edit Application" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
-                            CommandParameter="AddAttorney"/>
+                            CommandParameter="EditApplication"/>
                     <Button Content="Search Voucher" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
                             CommandParameter="SearchVoucher"/>
-                    <Button Content="Defendant A-Z" Style="{StaticResource MenuButton}"
+                    <Button Content="Search by Booking #" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
-                            CommandParameter="DefendantAZ"/>
-                    <Button Content="Reports" Style="{StaticResource MenuButton}"
+                            CommandParameter="SearchByBooking"/>
+                    <Button Content="Add Attorney List" Style="{StaticResource MenuButton}"
                             Command="{Binding NavigateCommand}"
-                            CommandParameter="Reports"/>
+                            CommandParameter="AddAttorney"/>
+                    <Button Content="Edit Attorney List" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="EditAttorney"/>
+                    <Button Content="Search Child" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="SearchChild"/>
 
                     <Separator Margin="0,20" Background="#3A5A7A"/>
 
@@ -97,6 +101,37 @@
             <!-- Main Content Area -->
             <Border Grid.Column="1" Padding="20">
                 <ContentControl x:Name="ContentArea"/>
+            </Border>
+
+            <!-- Right Navigation Panel: Menu Categories -->
+            <Border Grid.Column="2" Background="#1A3A5C">
+                <StackPanel Margin="10,20">
+                    <TextBlock Text="Menu"
+                               FontSize="20" FontWeight="Bold"
+                               Foreground="White" Margin="10,0,0,24"/>
+
+                    <Button Content="Application Menu" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="ApplicationMenu"/>
+                    <Button Content="Document Menu" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="DocumentMenu"/>
+                    <Button Content="Professional" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="Professional"/>
+                    <Button Content="Reports Menu" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="ReportsMenu"/>
+                    <Button Content="Administrator Menu" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="AdministratorMenu"/>
+                    <Button Content="CD Number Reverse Order" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="CDNumberReverse"/>
+                    <Button Content="Defendant A-Z" Style="{StaticResource MenuButton}"
+                            Command="{Binding NavigateCommand}"
+                            CommandParameter="DefendantAZ"/>
+                </StackPanel>
             </Border>
         </Grid>
     </DockPanel>
