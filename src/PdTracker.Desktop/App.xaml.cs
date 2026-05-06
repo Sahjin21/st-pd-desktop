@@ -111,21 +111,40 @@ public partial class App : Application
         SaveSettings(sqlitePath, accdbPath);
         ConfigureServices(sqlitePath);
 
-        // Validate connection
-        try
+        // Validate connection — retry loop in case of transient or corrupt-DB issues
+        for (int attempt = 1; attempt <= 3; attempt++)
         {
-            using var scope = Services.CreateScope();
-            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
-            using var db = dbFactory.CreateDbContext();
-            if (!db.Database.CanConnect())
-                throw new Exception("Cannot connect to the database.");
-        }
-        catch (Exception ex)
-        {
-            ShowError("Database Error",
-                new Exception($"Could not open '{sqlitePath}'.\n\n{ex.Message}", ex));
-            Shutdown();
-            return;
+            try
+            {
+                using var scope = Services.CreateScope();
+                var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<PdTrackerDbContext>>();
+                using var db = dbFactory.CreateDbContext();
+                if (!db.Database.CanConnect())
+                    throw new Exception("Cannot connect to the database.");
+                break; // success
+            }
+            catch (Exception ex) when (attempt < 3)
+            {
+                ShowError("Database Error",
+                    new Exception($"Attempt {attempt}/3 failed: {ex.Message}\n\nThe app will ask you to select a database file.", ex));
+                // Force picker on retry
+                sqlitePath = "";
+                accdbPath = "";
+                var newPath = ShowFilePicker();
+                if (newPath == null) { Shutdown(); return; }
+                sqlitePath = newPath.Value.sqlitePath;
+                accdbPath = newPath.Value.accdbPath;
+                SaveSettings(sqlitePath, accdbPath);
+                CurrentSqlitePath = sqlitePath;
+                ConfigureServices(sqlitePath);
+            }
+            catch (Exception ex)
+            {
+                ShowError("Database Error",
+                    new Exception($"Could not open the database after 3 attempts.\n\n{ex.Message}", ex));
+                Shutdown();
+                return;
+            }
         }
 
         var mainWindow = new MainWindow();
