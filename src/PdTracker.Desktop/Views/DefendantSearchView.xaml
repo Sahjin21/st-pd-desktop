@@ -12,8 +12,33 @@
         <!-- Search Bar -->
         <Border Grid.Row="0" Margin="0,0,0,16">
             <StackPanel>
-                <!-- First + Last Name row -->
-                <Grid Margin="0,0,0,8">
+                <!-- SOID field — shown for Search by Booking # and Search Child modes -->
+                <Grid Margin="0,0,0,8" Visibility="{Binding ShowSoidField, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Booking / SOID" FontSize="11" Foreground="Gray" Margin="4,0,0,2"/>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding SoIdSearch, UpdateSourceTrigger=PropertyChanged}"
+                                 FontSize="14" Padding="10,8"
+                                 VerticalContentAlignment="Center"
+                                 conv:AutoCompleteBehavior.SuggestionSource="{Binding SoidSuggestions}">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Return" Command="{Binding SearchCommand}"/>
+                            </TextBox.InputBindings>
+                        </TextBox>
+                    </StackPanel>
+
+                    <Button Grid.Column="2" Content="Search" Command="{Binding SearchCommand}"
+                            Padding="28,8" FontSize="14" Cursor="Hand" VerticalAlignment="Bottom"/>
+                </Grid>
+
+                <!-- First + Last Name row — hidden in SOID-only modes -->
+                <Grid Margin="0,0,0,8" Visibility="{Binding ShowSoidField, Converter={StaticResource InverseBoolToVisibilityConverter}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="8"/>
@@ -53,8 +78,12 @@
                 </Grid>
 
                 <!-- Hint -->
-                <TextBlock Text="Enter a last name, first name, or both to search. Press Enter or click Search."
-                           FontSize="11" Foreground="Gray" Margin="4,0,0,0"/>
+                <TextBlock FontSize="11" Foreground="Gray" Margin="4,0,0,0"
+                           Text="Enter a SOID to search by booking number."
+                           Visibility="{Binding ShowSoidField, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                <TextBlock FontSize="11" Foreground="Gray" Margin="4,0,0,0"
+                           Text="Enter a last name, first name, or both to search. Press Enter or click Search."
+                           Visibility="{Binding ShowSoidField, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
             </StackPanel>
         </Border>
 

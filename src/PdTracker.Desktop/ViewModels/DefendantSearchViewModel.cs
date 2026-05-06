@@ -13,9 +13,11 @@ public partial class DefendantSearchViewModel : ObservableObject
 
     [ObservableProperty] string _lastNameSearch = string.Empty;
     [ObservableProperty] string _firstNameSearch = string.Empty;
+    [ObservableProperty] string _soidSearch = string.Empty;
     [ObservableProperty] Defendant? _selectedDefendant;
     [ObservableProperty] int _selectedTabIndex;
     [ObservableProperty] bool _isReadOnly;
+    [ObservableProperty] bool _showSoidField;
 
     /// <summary>Current search mode: Edit, ReadOnly, Juvenile. Defaults to Edit.</summary>
     public string SearchMode { get; private set; } = "Edit";
@@ -25,6 +27,7 @@ public partial class DefendantSearchViewModel : ObservableObject
     // Autocomplete suggestion sources — loaded once, updated live
     public ObservableCollection<string> LastNameSuggestions { get; } = new();
     public ObservableCollection<string> FirstNameSuggestions { get; } = new();
+    public ObservableCollection<string> SoidSuggestions { get; } = new();
 
     // Tab sub-ViewModels
     public AppointInfoViewModel AppointInfoVm { get; }
@@ -44,6 +47,7 @@ public partial class DefendantSearchViewModel : ObservableObject
     {
         SearchMode = mode;
         IsReadOnly = mode == "ReadOnly";
+        ShowSoidField = mode == "ReadOnly" || mode == "Juvenile";
     }
 
     private async Task LoadSuggestionsAsync()
@@ -63,11 +67,19 @@ public partial class DefendantSearchViewModel : ObservableObject
                 .Distinct()
                 .OrderBy(n => n)
                 .ToListAsync();
+            var soids = await db.Defendants
+                .Where(d => !string.IsNullOrWhiteSpace(d.SOID))
+                .Select(d => d.SOID!)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
 
             LastNameSuggestions.Clear();
             FirstNameSuggestions.Clear();
+            SoidSuggestions.Clear();
             foreach (var n in lastNames) LastNameSuggestions.Add(n);
             foreach (var n in firstNames) FirstNameSuggestions.Add(n);
+            foreach (var s in soids) SoidSuggestions.Add(s);
         }
         catch { /* non-fatal */ }
     }
@@ -80,6 +92,7 @@ public partial class DefendantSearchViewModel : ObservableObject
             await using var db = await _dbFactory.CreateDbContextAsync();
             var ln = LastNameSearch.Trim();
             var fn = FirstNameSearch.Trim();
+            var soid = SoidSearch.Trim();
 
             // Load all — data is small enough; filter client-side for reliability
             var all = await db.Defendants
@@ -88,6 +101,11 @@ public partial class DefendantSearchViewModel : ObservableObject
                 .ToListAsync();
 
             var query = all.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(soid))
+                query = query.Where(d =>
+                    d.SOID != null &&
+                    d.SOID.Contains(soid, StringComparison.OrdinalIgnoreCase));
 
             if (!string.IsNullOrEmpty(ln))
                 query = query.Where(d =>

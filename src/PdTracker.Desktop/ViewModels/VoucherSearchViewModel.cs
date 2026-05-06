@@ -16,10 +16,31 @@ public partial class VoucherSearchViewModel : ObservableObject
     [ObservableProperty] Voucher? _selectedVoucher;
 
     public ObservableCollection<Voucher> Results { get; } = new();
+    public ObservableCollection<string> VoucherNumberSuggestions { get; } = new();
 
     public VoucherSearchViewModel(IDbContextFactory<PdTrackerDbContext> dbFactory)
     {
         _dbFactory = dbFactory;
+        _ = LoadSuggestionsAsync();
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var numbers = await db.Vouchers
+                .Where(v => !string.IsNullOrWhiteSpace(v.VoucherNumber))
+                .Select(v => v.VoucherNumber!)
+                .Distinct()
+                .OrderBy(n => n)
+                .ToListAsync();
+
+            VoucherNumberSuggestions.Clear();
+            foreach (var n in numbers)
+                VoucherNumberSuggestions.Add(n);
+        }
+        catch { /* non-fatal */ }
     }
 
     [RelayCommand]
