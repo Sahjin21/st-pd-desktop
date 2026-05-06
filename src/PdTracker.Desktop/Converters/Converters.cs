@@ -285,13 +285,17 @@ public static class AutoCompleteBehavior
         {
             ClosePopup();
 
+            // Ensure the TextBox is measured so ActualWidth is available
+            anchor.Dispatcher.Invoke(() => { });
+
             var listBox = new ListBox
             {
                 Background = Brushes.White,
                 BorderBrush = new SolidColorBrush(Color.FromRgb(170, 170, 170)),
                 BorderThickness = new Thickness(1),
                 MaxHeight = 200,
-                Width = anchor.ActualWidth > 0 ? anchor.ActualWidth : anchor.Width,
+                Width = Math.Max(anchor.ActualWidth, 250),
+                MinWidth = 250,
                 FontSize = 13,
                 Foreground = Brushes.Black,
                 ItemContainerStyle = new Style(typeof(ListBoxItem))
@@ -300,11 +304,7 @@ public static class AutoCompleteBehavior
                 }
             };
 
-            listBox.ItemTemplate = new DataTemplate
-            {
-                VisualTree = new FrameworkElementFactory(typeof(TextBlock)),
-            };
-
+            listBox.DisplayMemberPath = ""; // Show string directly
             foreach (var item in items)
                 listBox.Items.Add(item);
 
@@ -333,6 +333,7 @@ public static class AutoCompleteBehavior
                 Placement = PlacementMode.Bottom,
                 StaysOpen = false,
                 AllowsTransparency = false,
+                Width = Math.Max(anchor.ActualWidth, 250),
                 Child = new Border
                 {
                     Background = Brushes.White,
@@ -346,7 +347,12 @@ public static class AutoCompleteBehavior
             _activePopup = popup;
             _activeListBox = listBox;
             _associatedTextBox = anchor;
-            popup.IsOpen = true;
+
+            // Defer IsOpen to the next dispatcher tick so layout is finalized
+            anchor.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+            {
+                popup.IsOpen = true;
+            });
         }
 
         private static void ClosePopup()
