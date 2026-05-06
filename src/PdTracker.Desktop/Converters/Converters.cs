@@ -201,6 +201,25 @@ public static class AutoCompleteBehavior
                 };
             }
 
+            textBox.GotFocus += (s, args) =>
+            {
+                // When user clicks into the field before typing, show all suggestions immediately
+                // (only if there's text in the field and popup isn't already open)
+                if (_activePopup != null && _activePopup.IsOpen) return;
+                if (_activeSuggestions == null) return;
+                string typed = textBox.Text.Trim();
+                if (string.IsNullOrEmpty(typed))
+                {
+                    var all = _activeSuggestions
+                        .Where(x => !string.IsNullOrEmpty(x))
+                        .OrderBy(x => x)
+                        .Take(8)
+                        .ToList();
+                    if (all.Count > 0)
+                        ShowPopup(textBox, all);
+                }
+            };
+
             textBox.TextChanged += (s, args) =>
             {
                 string typed = textBox.Text.Trim();
@@ -212,8 +231,8 @@ public static class AutoCompleteBehavior
 
                 var matches = _activeSuggestions
                     .Where(x => !string.IsNullOrEmpty(x) &&
-                                (x.StartsWith(typed, StringComparison.OrdinalIgnoreCase) ||
-                                 x.Contains(typed, StringComparison.OrdinalIgnoreCase)))
+                                x.StartsWith(typed, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x)
                     .Take(8)
                     .ToList();
 

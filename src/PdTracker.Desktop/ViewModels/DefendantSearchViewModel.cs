@@ -106,16 +106,21 @@ public partial class DefendantSearchViewModel : ObservableObject
 
     partial void OnLastNameSearchChanged(string value)
     {
-        // When a last name is chosen from the dropdown, filter first names to only
-        // show first names that share that last name in the DB.
-        FilterFirstNameSuggestions(FirstNameSearch.Trim(), value.Trim());
+        // Only cascade-filter first names when the chosen value is a real last name in the DB.
+        // This prevents wrong filtering on partial keystrokes that don't match anything.
+        var chosen = value.Trim();
+        var isValidLastName = !string.IsNullOrEmpty(chosen) &&
+                              LastNameSuggestions.Any(ln => ln.Equals(chosen, StringComparison.OrdinalIgnoreCase));
+        FilterFirstNameSuggestions(FirstNameSearch.Trim(), isValidLastName ? chosen : string.Empty);
     }
 
     partial void OnFirstNameSearchChanged(string value)
     {
-        // When a first name is chosen from the dropdown, filter last names to only
-        // show last names that share that first name in the DB.
-        FilterLastNameSuggestions(LastNameSearch.Trim(), value.Trim());
+        // Only cascade-filter last names when the chosen value is a real first name in the DB.
+        var chosen = value.Trim();
+        var isValidFirstName = !string.IsNullOrEmpty(chosen) &&
+                               FirstNameSuggestions.Any(fn => fn.Equals(chosen, StringComparison.OrdinalIgnoreCase));
+        FilterLastNameSuggestions(LastNameSearch.Trim(), isValidFirstName ? chosen : string.Empty);
     }
 
     private void FilterFirstNameSuggestions(string typedFirst, string chosenLast)
