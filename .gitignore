@@ -36,3 +36,6 @@ Thumbs.db
 # IDE
 .idea/
 *.swp
+
+.dotnet-home/
+src/publish/
