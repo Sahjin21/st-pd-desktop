@@ -3,7 +3,7 @@ namespace PdTracker.Core.Entities;
 public class Appointment : Entity
 {
     public int ApplicationNumber { get; set; }
-    public string AttyCode { get; set; } = string.Empty;
+    public string? AttyCode { get; set; }
     public DateTime? Date { get; set; }
     public string? Action { get; set; } // "A"=Appointed, "D"=Denied + many others
     public DateTime? DateSigned { get; set; }

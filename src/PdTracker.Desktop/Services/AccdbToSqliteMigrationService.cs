@@ -221,6 +221,18 @@ public class AccdbToSqliteMigrationService
         catch { return null; }
     }
 
+    private static string? GetFirstString(Recordset rs, params (string field, int maxLen)[] options)
+    {
+        foreach (var (field, maxLen) in options)
+        {
+            var value = GetString(rs, field, maxLen);
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        return null;
+    }
+
     // ─── Enum parsers ────────────────────────────────────────────────────
 
     private static Core.Entities.JurisdictionCode? ParseJurisdictionCode(string? val)
@@ -391,20 +403,29 @@ public class AccdbToSqliteMigrationService
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
             var rs = OpenRecordset("SELECT * FROM INCOME_SOURCE");
-            int count = 0;
+            int count = 0, dupes = 0;
+            var seenCodes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (!rs.EOF)
             {
+                var code = GetFirstString(rs, ("IncomeSource", 4), ("IncomeSourceCode", 4)) ?? "";
+                if (string.IsNullOrWhiteSpace(code) || !seenCodes.Add(code))
+                {
+                    dupes++;
+                    rs.MoveNext();
+                    continue;
+                }
+
                 db.IncomeSources.Add(new IncomeSource
                 {
-                    IncomeSourceCode = GetString(rs, "IncomeSourceCode", 10) ?? "",
-                    Description = GetString(rs, "Description", 255),
+                    IncomeSourceCode = code,
+                    Description = GetString(rs, "Description", 20),
                 });
                 rs.MoveNext();
                 count++;
             }
             rs.Close();
             db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} INCOME_SOURCE records.");
+            OnProgress?.Invoke($"  Migrated {count} INCOME_SOURCE records. ({dupes} duplicates skipped)");
         }
         catch (Exception ex) { OnProgress?.Invoke($"  ERROR INCOME_SOURCE: {ex.Message}"); }
     }
@@ -646,11 +667,19 @@ public class AccdbToSqliteMigrationService
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
             var existingIds = db.Defendants.Select(d => d.DefendantId).ToHashSet();
             var rs = OpenRecordset("SELECT * FROM DEF_SPOUSE");
-            int count = 0, skipped = 0, batch = 0;
+            int count = 0, skipped = 0, duplicates = 0, batch = 0;
+            var seenDefendantIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (!rs.EOF)
             {
                 var defId = GetString(rs, "DefendantID", 9) ?? "";
                 if (!existingIds.Contains(defId)) { skipped++; rs.MoveNext(); continue; }
+                if (!seenDefendantIds.Add(defId))
+                {
+                    duplicates++;
+                    rs.MoveNext();
+                    continue;
+                }
+
                 db.DefSpouses.Add(new DefSpouse
                 {
                     DefendantId = defId,
@@ -667,7 +696,7 @@ public class AccdbToSqliteMigrationService
             }
             rs.Close();
             if (batch > 0) db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} DEF_SPOUSE records. ({skipped} orphaned/skipped)");
+            OnProgress?.Invoke($"  Migrated {count} DEF_SPOUSE records. ({duplicates} duplicates, {skipped} orphaned/skipped)");
         }
         catch (Exception ex) { OnProgress?.Invoke($"  ERROR DEF_SPOUSE: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
@@ -1128,16 +1157,25 @@ public class AccdbToSqliteMigrationService
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
             var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
+            var existingAttyCodes = db.AttorneyLists.Select(a => a.AttyCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var rs = OpenRecordset("SELECT * FROM APPOINTMENT");
-            int count = 0, skipped = 0, batch = 0;
+            int count = 0, skipped = 0, invalidAttorneyRefs = 0;
             while (!rs.EOF)
             {
                 var appNum = GetInt32(rs, "ApplicationNumber");
                 if (!existingAppNums.Contains(appNum)) { skipped++; rs.MoveNext(); continue; }
+
+                var attyCode = GetString(rs, "AttyCode", 10);
+                if (!string.IsNullOrWhiteSpace(attyCode) && !existingAttyCodes.Contains(attyCode))
+                {
+                    invalidAttorneyRefs++;
+                    attyCode = null;
+                }
+
                 db.Appointments.Add(new Appointment
                 {
                     ApplicationNumber = appNum,
-                    AttyCode = GetString(rs, "AttyCode", 10) ?? "",
+                    AttyCode = attyCode,
                     Date = GetDateTime(rs, "Date"),
                     Action = GetString(rs, "Action", 5),
                     DateSigned = GetDateTime(rs, "DateSigned"),
@@ -1151,14 +1189,22 @@ public class AccdbToSqliteMigrationService
                     DUICourt = GetBool(rs, "DUICourt"),
                     JuvenileSubstType = GetString(rs, "JuvenileSubstType", 50),
                 });
+                try
+                {
+                    db.SaveChanges();
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    skipped++;
+                    OnProgress?.Invoke($"  SKIP APPOINTMENT App#{appNum}: {ex.InnerException?.Message ?? ex.Message}");
+                    db.ChangeTracker.Clear();
+                }
+
                 rs.MoveNext();
-                count++;
-                batch++;
-                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            if (batch > 0) db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} APPOINTMENT records. ({skipped} orphaned/skipped)");
+            OnProgress?.Invoke($"  Migrated {count} APPOINTMENT records. ({invalidAttorneyRefs} invalid attorney refs nulled, {skipped} orphaned/skipped)");
         }
         catch (Exception ex) { OnProgress?.Invoke($"  ERROR APPOINTMENT: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }
@@ -1170,12 +1216,20 @@ public class AccdbToSqliteMigrationService
         {
             using var db = new PdTrackerDbContext(MakeOpts(SqlitePath));
             var existingAppNums = db.Defendants.Select(d => d.ApplicationNumber).ToHashSet();
+            var existingAttyCodes = db.AttorneyLists.Select(a => a.AttyCode).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var rs = OpenRecordset("SELECT * FROM VOUCHER");
-            int count = 0, dupes = 0, skipped = 0, batch = 0;
-            var seenVnums = new HashSet<string>();
+            int count = 0, dupes = 0, skipped = 0, orphanedImported = 0, invalidAttorneyRefs = 0;
+            var seenVnums = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (!rs.EOF)
             {
                 var vnum = GetString(rs, "VoucherNumber", 20) ?? "";
+                if (string.IsNullOrWhiteSpace(vnum))
+                {
+                    skipped++;
+                    rs.MoveNext();
+                    continue;
+                }
+
                 if (!seenVnums.Add(vnum))
                 {
                     OnProgress?.Invoke($"  SKIP dupe VOUCHER: {vnum}");
@@ -1183,19 +1237,27 @@ public class AccdbToSqliteMigrationService
                     rs.MoveNext();
                     continue;
                 }
+
                 var appNum = GetInt32Nullable(rs, "ApplicationNumber");
                 if (appNum.HasValue && !existingAppNums.Contains(appNum.Value))
                 {
-                    skipped++;
-                    rs.MoveNext();
-                    continue;
+                    orphanedImported++;
+                    appNum = null;
                 }
+
+                var attyCode = GetString(rs, "AttyCode", 10);
+                if (!string.IsNullOrWhiteSpace(attyCode) && !existingAttyCodes.Contains(attyCode))
+                {
+                    invalidAttorneyRefs++;
+                    attyCode = null;
+                }
+
                 db.Vouchers.Add(new Voucher
                 {
                     VoucherNumber = vnum,
                     VoucherLetter = GetString(rs, "VoucherLetter", 5),
                     ApplicationNumber = appNum,
-                    AttyCode = GetString(rs, "AttyCode", 10),
+                    AttyCode = attyCode,
                     DateVchrPaid = GetDateTime(rs, "DateVchrPaid"),
                     DateCaseCompleted = GetDateTime(rs, "DateCaseCompleted"),
                     InCourtHours = (decimal?)GetDoubleNullable(rs, "InCourtHours"),
@@ -1206,14 +1268,22 @@ public class AccdbToSqliteMigrationService
                     Outcome = ParseOutcome(GetString(rs, "Outcome")),
                     OutcomeOther = GetString(rs, "OutcomeOther", 255),
                 });
+                try
+                {
+                    db.SaveChanges();
+                    count++;
+                }
+                catch (Exception ex)
+                {
+                    skipped++;
+                    OnProgress?.Invoke($"  SKIP VOUCHER {vnum}: {ex.InnerException?.Message ?? ex.Message}");
+                    db.ChangeTracker.Clear();
+                }
+
                 rs.MoveNext();
-                count++;
-                batch++;
-                if (batch >= 200) { db.SaveChanges(); batch = 0; }
             }
             rs.Close();
-            if (batch > 0) db.SaveChanges();
-            OnProgress?.Invoke($"  Migrated {count} VOUCHER records. ({dupes} dupes, {skipped} orphaned/skipped)");
+            OnProgress?.Invoke($"  Migrated {count} VOUCHER records. ({dupes} dupes, {orphanedImported} orphaned app# imported without defendant link, {invalidAttorneyRefs} invalid attorney refs nulled, {skipped} skipped)");
         }
         catch (Exception ex) { OnProgress?.Invoke($"  ERROR VOUCHER: {ex.Message}\n  INNER: {ex.InnerException?.Message}"); }
     }

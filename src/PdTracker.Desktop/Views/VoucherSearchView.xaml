@@ -30,7 +30,7 @@
         </Border>
 
         <!-- Results -->
-        <Grid Grid.Row="1" Visibility="{Binding SelectedVoucher, Converter={StaticResource NullToVisibilityConverter}}">
+        <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="200"/>
                 <RowDefinition Height="*"/>
@@ -52,7 +52,8 @@
             </DataGrid>
 
             <!-- Detail Panel -->
-            <Border Grid.Row="1" BorderBrush="#CCC" BorderThickness="1" CornerRadius="4" Margin="0,16,0,0" Padding="16">
+            <Border Grid.Row="1" BorderBrush="#CCC" BorderThickness="1" CornerRadius="4" Margin="0,16,0,0" Padding="16"
+                    Visibility="{Binding SelectedVoucher, Converter={StaticResource NullToVisibilityConverter}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -93,6 +94,12 @@
 
         <TextBlock Grid.Row="1" Text="Enter a voucher number or app # to search"
                    VerticalAlignment="Center" HorizontalAlignment="Center"
-                   Foreground="Gray" FontStyle="Italic" FontSize="14"/>
+                   Foreground="Gray" FontStyle="Italic" FontSize="14"
+                   Visibility="{Binding HasSearched, Converter={StaticResource InverseBoolToVisibilityConverter}}"/>
+
+        <TextBlock Grid.Row="1" Text="No vouchers matched that search."
+                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                   Foreground="Gray" FontStyle="Italic" FontSize="14"
+                   Visibility="{Binding ShowNoResults, Converter={StaticResource BoolToVisibilityConverter}}"/>
     </Grid>
 </UserControl>

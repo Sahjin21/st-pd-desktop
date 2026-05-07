@@ -345,6 +345,22 @@ public static class AutoCompleteBehavior
 
         anchor.Dispatcher.Invoke(() => { });
 
+        var itemStyle = new Style(typeof(ListBoxItem));
+        itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)));
+        itemStyle.Setters.Add(
+            new EventSetter(
+                UIElement.PreviewMouseLeftButtonDownEvent,
+                new MouseButtonEventHandler((s, args) =>
+                {
+                    if (s is ListBoxItem item &&
+                        item.DataContext is string selected &&
+                        _associatedTextBox != null)
+                    {
+                        CommitSelection(_associatedTextBox, selected);
+                        args.Handled = true;
+                    }
+                })));
+
         var listBox = new ListBox
         {
             Background = Brushes.White,
@@ -355,20 +371,11 @@ public static class AutoCompleteBehavior
             MinWidth = 250,
             FontSize = 13,
             Foreground = Brushes.Black,
-            ItemContainerStyle = new Style(typeof(ListBoxItem))
-            {
-                Setters = { new Setter(Control.PaddingProperty, new Thickness(6, 4, 6, 4)) }
-            }
+            ItemContainerStyle = itemStyle
         };
 
         foreach (var item in items)
             listBox.Items.Add(item);
-
-        listBox.MouseLeftButtonUp += (s, args) =>
-        {
-            if (listBox.SelectedItem != null && _associatedTextBox != null)
-                CommitSelection(_associatedTextBox, listBox.SelectedItem.ToString()!);
-        };
 
         var popup = new Popup
         {

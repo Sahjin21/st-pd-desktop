@@ -14,6 +14,9 @@ public partial class VoucherSearchViewModel : ObservableObject
 
     [ObservableProperty] string _voucherNumber = string.Empty;
     [ObservableProperty] Voucher? _selectedVoucher;
+    [ObservableProperty] bool _hasSearched;
+    [ObservableProperty] bool _hasResults;
+    [ObservableProperty] bool _showNoResults;
 
     public ObservableCollection<Voucher> Results { get; } = new();
     public ObservableCollection<string> VoucherNumberSuggestions { get; } = new();
@@ -47,32 +50,33 @@ public partial class VoucherSearchViewModel : ObservableObject
     async Task SearchAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
+        var term = VoucherNumber.Trim();
 
-        List<Voucher> list;
-        if (int.TryParse(VoucherNumber.Trim(), out var num))
+        var all = await db.Vouchers
+            .Include(v => v.Defendant)
+            .Include(v => v.Attorney)
+            .OrderByDescending(v => v.DateVchrPaid)
+            .ToListAsync();
+
+        IEnumerable<Voucher> query = all;
+
+        if (!string.IsNullOrEmpty(term))
         {
-            list = await db.Vouchers
-                .Include(v => v.Defendant)
-                .Include(v => v.Attorney)
-                .Where(v => v.VoucherNumber == num.ToString() || v.ApplicationNumber == num)
-                .OrderByDescending(v => v.DateVchrPaid)
-                .Take(20)
-                .ToListAsync();
-        }
-        else
-        {
-            var term = VoucherNumber.Trim().ToLower();
-            list = await db.Vouchers
-                .Include(v => v.Defendant)
-                .Include(v => v.Attorney)
-                .Where(v => v.VoucherNumber.ToLower().Contains(term)
-                         || (v.Defendant != null && v.Defendant.LastName.ToLower().Contains(term)))
-                .OrderByDescending(v => v.DateVchrPaid)
-                .Take(20)
-                .ToListAsync();
+            query = query.Where(v =>
+                (!string.IsNullOrEmpty(v.VoucherNumber) &&
+                 v.VoucherNumber.StartsWith(term, StringComparison.OrdinalIgnoreCase)) ||
+                (v.ApplicationNumber?.ToString().StartsWith(term, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                (!string.IsNullOrEmpty(v.Defendant?.LastName) &&
+                 v.Defendant.LastName.StartsWith(term, StringComparison.OrdinalIgnoreCase)));
         }
 
         Results.Clear();
-        foreach (var v in list) Results.Add(v);
+        foreach (var v in query.Take(100))
+            Results.Add(v);
+
+        HasSearched = true;
+        HasResults = Results.Count > 0;
+        ShowNoResults = HasSearched && !HasResults;
+        SelectedVoucher = Results.FirstOrDefault();
     }
 }
