@@ -48,6 +48,7 @@ cd src
 dotnet restore
 dotnet build
 dotnet run --project PdTracker.Desktop
+dotnet run --project src/PdTracker.Desktop/PdTracker.Desktop.csproj
 ```
 
 ### Build Installer

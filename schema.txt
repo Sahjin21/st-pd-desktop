@@ -1,0 +1,605 @@
+TABLE:application stats
+  Date,8,8
+  DenyCode,10,2
+  RemovalCode,10,2
+  ApplicationNumber,4,4
+  Expr1,4,4
+  Expr3,4,4
+  Expr2,4,4
+TABLE:Appoint_REP
+  Rep_ID,4,4
+  Rep_Name,10,50
+  Rep_initials,10,3
+TABLE:APPOINTMENT
+  ApplicationNumber,4,4
+  AttyCode,10,6
+  Date,8,8
+  Action,10,1
+  RemovalCode,10,2
+  DateSigned,8,8
+  DenyCode,10,2
+  VoucherNumber,4,4
+  VoucherLetter,10,1
+  VOUCHER DOC,11,0
+  Bonded,1,1
+  Visitation,1,1
+  Rep_ID,4,4
+  Time,8,8
+  Contract Case,1,1
+  DUI Court,1,1
+  GAL,1,1
+  BOND TYPE,10,255
+  AMOUNT PAID,4,4
+  COMMENT,10,255
+  JUVENILE SUBSTITUTION TYPE,10,255
+TABLE:APPOINTMENT TEST
+  ApplicationNumber,4,4
+  AttyCode,10,6
+  Date,8,8
+  Action,10,1
+  RemovalCode,10,2
+  DateSigned,8,8
+  DenyCode,10,2
+  VoucherNumber,4,4
+  VoucherLetter,10,1
+  VOUCHER DOC,11,0
+  Bonded,1,1
+  Visitation,1,1
+  Rep_ID,4,4
+  Time,8,8
+  Contract Case,1,1
+  DUI Court,1,1
+TABLE:attorney detail_paid for crosstab
+  AttyCode,10,6
+  VoucherNumber,4,4
+  LastName,10,25
+  FirstName,10,20
+  Date,8,8
+  SumOfTotalAmountPaid,5,8
+TABLE:Attorney_list
+  AttyCode,10,6
+  FirstName,10,20
+  MiddleName,10,20
+  LastName,10,25
+  Street,10,30
+  Suite,10,20
+  City,10,25
+  State,10,2
+  ZipCode,10,9
+  Email,10,50
+  Vender Number,10,8
+  Comments,12,0
+  OfficeNumber,10,13
+  FaxNumber,10,13
+  HomeNumber,10,13
+  PagerNumber,10,13
+  MobileNumber,10,13
+  OtherNumber,10,13
+  PhoneType,10,6
+  Date,8,8
+  Status,10,8
+  Deathpenalty,1,1
+  Murder,1,1
+  Felony,1,1
+  Misd,1,1
+  Appeal,1,1
+  Juvenile,1,1
+  GAL,1,1
+  Notes,10,50
+TABLE:CHARGE
+  ApplicationNumber,4,4
+  ChargeNumber,10,6
+  ChargeType,10,3
+  WarrantNumber,10,20
+  CaseNumber,10,20
+  ChargeID,7,8
+  NOTE,10,10
+TABLE:Charge Type
+  Charge Type,10,3
+  Description,10,30
+TABLE:CHARGE_ID
+  ChargeID,7,8
+  CHARGECODE,10,4
+  CHARGESELECT,10,12
+  Description,10,30
+TABLE:CHARGE_ID 12-12-23
+  ChargeID,7,8
+  CHARGECODE,10,4
+  CHARGESELECT,10,12
+  Description,10,30
+TABLE:CHARGE_ID 6-6-25
+  ChargeID,7,8
+  CHARGECODE,10,4
+  CHARGESELECT,10,12
+  Description,10,30
+TABLE:CHARGE_ID old 2
+  ChargeID,7,8
+  CHARGECODE,10,4
+  CHARGESELECT,10,12
+  Description,10,20
+TABLE:charge_ID1
+  chargeID,4,4
+  chargecode,10,255
+  chargeselect,10,255
+  description,12,0
+TABLE:circuit defender fax list
+  Name,10,255
+  Fax,10,255
+TABLE:Complaint
+  AttyCode,10,6
+  ComplaintDate,8,8
+  VoucherNumber,4,4
+  VOUCHERLETTER,10,1
+TABLE:DEF_ADDRESS
+  AddressCounter,4,4
+  ApplicationNumber,4,4
+  Date,8,8
+  Street,10,30
+  Suite,10,12
+  City,10,25
+  State,10,2
+  ZipCode,10,9
+  AddressFlag,10,1
+  Residence Type,10,255
+TABLE:DEF_ALIAS
+  AliasCounter,4,4
+  ApplicationNumber,4,4
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+TABLE:DEF_PHONE
+  PhoneCounter,4,4
+  ApplicationNumber,4,4
+  PhoneNumber,10,10
+  PhoneType,10,7
+  EXT,10,10
+TABLE:DEF_SPOUSE
+  SpouseCounter,4,4
+  ApplicationNumber,4,4
+  Date,8,8
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  Employed,1,1
+  Relationship,10,9
+TABLE:DEFENDANT
+  DefendantID,10,9
+  Date,8,8
+  ApplicationNumber,4,4
+  SOID,10,255
+  FirstName,10,20
+  MiddleName,10,15
+  LastName,10,25
+  DOB,8,8
+  Education,10,3
+  Reference1,10,75
+  Reference2,10,75
+  defphoto,11,0
+  defsignature,11,0
+  dependants,4,4
+  dep_description,10,25
+  dep_other,10,20
+  Race,10,255
+  Sex,10,255
+TABLE:DENIAL_CODE
+  DenyCode,10,2
+  Description,10,30
+  Long text,10,100
+TABLE:DENIAL_CODE 12-12-23
+  DenyCode,10,2
+  Description,10,30
+  Long text,10,100
+TABLE:Dependant Description
+  ID,4,4
+  Field1,10,255
+TABLE:Dependant Description1
+  ID,4,4
+  Field1,10,255
+TABLE:DEPENDENT
+  DependentCounter,4,4
+  ApplicationNumber,4,4
+  LastName,10,25
+  FirstName,10,20
+  Relation,10,20
+TABLE:DP_accountspayable
+  VoucherNumber,4,4
+  VoucherLetter,10,1
+  ApplicationNumber,4,4
+  DP_date,8,8
+  AmountPaid,5,8
+  VendorName,10,50
+  VendorNumber,4,4
+  Service Type,10,2
+  DPNmber,4,4
+TABLE:EIA
+  ApplicationNumber,4,4
+  CalendarDate,8,8
+  Comments,12,0
+  Judge,10,2
+  EIAResult,10,12
+  YearsJail,4,4
+  MonthsJail,4,4
+  YearsProbation,4,4
+  MonthsProbation,4,4
+  YearsTotal,4,4
+  MonthsTotal,4,4
+  Reimbursement,5,8
+  NewBondAmt,5,8
+  INS,1,1
+  MJA,1,1
+  MJA_ATTY,4,4
+  SCP,1,1
+TABLE:FIN_EMPLOYER
+  EmployerCounter,4,4
+  ApplicationNumber,4,4
+  EmployerName,10,30
+  City,10,25
+  Phone,10,10
+  PayAmt,5,8
+  PayPeriod,10,15
+  NetOrGross,10,5
+  TimeEmployed,10,10
+TABLE:FIN_SPEMPLOYER
+  SpemployCounter,4,4
+  ApplicationNumber,4,4
+  EmployerName,10,30
+  Ciity,10,25
+  Phone,10,10
+  PayAmt,5,8
+  PayPeriod,10,12
+  NetOrGross,10,5
+  TimeEmployed,10,10
+TABLE:FIN_SPUNEMPLOY
+  SpunemployCounter,4,4
+  ApplicationNumber,4,4
+  IncomeSource,10,4
+  Description,10,30
+  PayAmt,5,8
+  PayPeriod,10,11
+  TimeUnemployed,10,20
+TABLE:FIN_UNEMPLOYED
+  UnemployCounter,4,4
+  ApplicationNumber,4,4
+  IncomeSource,10,4
+  Description,10,30
+  PayAmt,5,8
+  PayPeriod,10,9
+  TimeUnemployed,10,20
+TABLE:FINANCE_AUTO
+  AutoCounter,4,4
+  ApplicationNumber,4,4
+  Model,10,15
+  Year,10,4
+  Balance,5,8
+TABLE:FINANCE_BANK
+  BankCounter,4,4
+  ApplicationNumber,4,4
+  BankName,10,20
+  AccountType,10,10
+  Balance,5,8
+  Account Owner,10,255
+TABLE:FINANCE_HOME
+  HomeCounter,4,4
+  ApplicationNumber,4,4
+  MortgagePay,5,8
+  HomeValue,5,8
+  MortgageBalance,5,8
+TABLE:FINANCE_OTHER
+  OtherCounter,4,4
+  ApplicationNumber,4,4
+  Type,10,50
+  Description,10,200
+  MonthlyAmount,5,8
+  TotalAmount,5,8
+TABLE:FINANCE_RENT
+  RentCounter,4,4
+  ApplicationNumber,4,4
+  MonthlyRent,5,8
+TABLE:INCOME_SOURCE
+  IncomeSource,10,4
+  Description,10,20
+TABLE:JBAIL
+  ID,7,8
+  CHARGECODE,10,4
+  CHARGESECT,10,12
+  DESCRIPTIO,10,20
+TABLE:Judge
+  JudgeCode,10,2
+  description,10,20
+TABLE:JURISDICTION
+  JurisdictionCode,10,3
+  Description,10,30
+TABLE:Juvenile Case Type
+  ID,4,4
+  Case Type,10,255
+TABLE:Juvenile Relation
+  ID,4,4
+  APPLICATIONUMBER,4,4
+  Child Last Name,10,25
+  Child First Name,10,25
+  Relation,10,25
+  Case Number,10,25
+  Reference Juvenile,10,255
+  Reference Phone,4,4
+  Number of Children in home,4,4
+  Ages,10,255
+  Living expenses Relationship,10,255
+  DOB,8,8
+TABLE:Juvenile Relation ID
+  ID,4,4
+  Relation,10,25
+TABLE:Juvenile Substitute Type
+  ID,4,4
+  Substitue Relation,10,50
+TABLE:JVReimburse
+  CaseNameLast,10,25
+  CaseNameFirst,10,20
+  Address,10,50
+  Apt,10,50
+  City,10,50
+  State,10,2
+  ZipCode,10,50
+  Phone,10,50
+  ReimburseNameLast,10,25
+  ReimburseNameFirst,10,20
+  CaseNumbers,10,50
+  DateOrdered,8,8
+  DateFirstDue,8,8
+  DateLastPay,8,8
+  AmtLastPay,5,8
+  AmtORdered,5,8
+  TotalPaid,5,8
+  Judge,10,50
+TABLE:Name AutoCorrect Save Failures
+  Object Name,10,255
+  Object Type,10,255
+  Failure Reason,10,255
+  Time,8,8
+TABLE:Object Definition
+  ID,4,4
+  ParentID,4,4
+  Object Type,12,0
+  Name,10,255
+  Extra1,12,0
+  Extra2,10,255
+  Extra3,10,255
+TABLE:paid_all_atty
+  AttyCode,10,6
+  ZipCode,10,9
+  JurisdictionCode,10,3
+  InCourtHours,10,4
+  OutCourtHours,10,4
+  TotalVoucherAmt,5,8
+  TotalAmountPaid,5,8
+  DateVchrPaid,8,8
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  VoucherNumber,4,4
+  nocharge,4,4
+TABLE:Paste Errors
+  Application Number,4,4
+  AttyCode,10,255
+  Date,8,8
+  Action,10,255
+  Removal Code,10,255
+  Date Signed,8,8
+  Denial Code,10,255
+  Voucher Number,4,4
+  VoucherLetter,10,255
+  VOUCHER DOCUMENT,11,0
+  Bonded,1,1
+  Visitation,1,1
+  Rep_ID,4,4
+  Time,8,8
+  Contract Case,1,1
+  DUI Court,1,1
+TABLE:QUALIFY
+  ApplicationNumber,4,4
+  Date,8,8
+  NoAction,1,1
+  Comment,12,0
+  CourtInformation,12,0
+  Entrydate,8,8
+  Rep_id,4,4
+  Dataentry_ID,4,4
+  Field1,101,4
+  Military,1,1
+TABLE:QUALIFY number change
+  ApplicationNumber,4,4
+  Date,8,8
+  NoAction,1,1
+  Comment,12,0
+  CourtInformation,12,0
+  Entrydate,8,8
+TABLE:Qualify temp
+  ApplicationNumber,4,4
+  date,8,8
+TABLE:qualify temp append
+  ApplicationNumber,4,4
+  Date,8,8
+  NoAction,1,1
+  Comment,12,0
+  CourtInformation,12,0
+  Entrydate,8,8
+TABLE:REMOVAL_CODE
+  RemovalCode,10,2
+  Description,10,20
+  Statement,10,100
+TABLE:SERV1
+  SERVID,4,4
+  Vendor Number,4,4
+  PINAME,10,50
+  COMPANY,10,50
+  CONTACTLAS,10,30
+  CONTACTFST,10,30
+  CONTACTMID,10,20
+  STREET,10,50
+  SUITE,10,20
+  CITY,10,30
+  STATE,10,2
+  ZIP,10,50
+  OFFICE,10,20
+  HOME,10,20
+  FAX,10,20
+  DATEON,8,8
+  DATEOFF,8,8
+  TYPE,10,2
+  COMMENTS,12,0
+TABLE:Switchboard Items
+  SwitchboardID,4,4
+  ItemNumber,3,2
+  ItemText,10,255
+  Command,3,2
+  Argument,10,50
+TABLE:TYPE
+  TYPE,10,2
+  TYPEDES,10,50
+TABLE:VOUCHER
+  Voucher Count,4,4
+  VoucherNumber,4,4
+  VoucherLetter,10,1
+  ApplicationNumber,4,4
+  DateVchrPaid,8,8
+  DateCaseCompleted,8,8
+  InCourtHours,10,4
+  OutCourtHours,10,4
+  CourtOrderedReimburse,5,8
+  TotalVoucherAmt,5,8
+  TotalAmountPaid,5,8
+  Guilty,1,1
+  NotGuilty,1,1
+  Plea,1,1
+  Nollepros,1,1
+  DeadDocket,1,1
+  Dismissed,1,1
+  AttorneyRemovedOther,1,1
+  AttorneyRemovedPC,1,1
+  AttorneyRemovedConflict,1,1
+  AttorneyRemovedWithdraw,1,1
+  AttorneyRemovedJudge,1,1
+  AttorneyRemovedIncome,1,1
+  Misc,1,1
+  HiredPc,1,1
+  AttyCode,10,6
+  JurisdictionCode,10,3
+  VoucherYear,10,4
+  CONTRACT VOUCHER,1,1
+  NOLO,1,1
+  PRE-TRIAL DIV,1,1
+  BENCH WARRANT,1,1
+  Transferred to Superior Court,1,1
+  DUI Sanctions,1,1
+  Order Attorney Removed,1,1
+  Community Service,1,1
+  Fines,1,1
+  Santion Date,8,8
+  Jail Sanction,1,1
+  DUI Terminated,1,1
+  DEPRIVATION,1,1
+  TERMINATION,1,1
+  APPEAL,1,1
+  CHINS,1,1
+TABLE:WARRANT
+  WARANT_COUNTER,4,4
+  WarrantNumber,10,20
+  AddOnCase,1,1
+  JurisdictionCode,10,3
+  Date,8,8
+  ArrestDate,8,8
+  CaseNumber,10,20
+  BondType,10,20
+  BondAmt,5,8
+  Jail,1,1
+  ApplicationNumber,4,4
+  Time,8,8
+TABLE:WARRANT WITH DUPS
+  WARANT_COUNTER,4,4
+  WarrantNumber,10,10
+  AddOnCase,1,1
+  JurisdictionCode,10,3
+  Date,8,8
+  ArrestDate,8,8
+  CaseNumber,10,10
+  BondType,10,20
+  BondAmt,5,8
+  Jail,1,1
+  ApplicationNumber,4,4
+TABLE:WARRANT_09242006
+  WARANT_COUNTER,4,4
+  WarrantNumber,10,14
+  AddOnCase,1,1
+  JurisdictionCode,10,3
+  Date,8,8
+  ArrestDate,8,8
+  CaseNumber,10,14
+  BondType,10,20
+  BondAmt,5,8
+  Jail,1,1
+  ApplicationNumber,4,4
+  Time,8,8
+TABLE:WTEMP
+  WARANT_COUNTER,4,4
+  WarrantNumber,10,8
+  AddOnCase,1,1
+  JurisdictionCode,10,3
+  Date,8,8
+  ArrestDate,8,8
+  CaseNumber,10,8
+  BondType,10,20
+  BondAmt,5,8
+  Jail,1,1
+  ApplicationNumber,4,4
+TABLE:ZIPCOBB
+  AttyCode,10,6
+  ZipCode,10,9
+  JurisdictionCode,10,3
+  InCourtHours,10,4
+  OutCourtHours,10,4
+  TotalVoucherAmt,5,8
+  TotalAmountPaid,5,8
+  DateVchrPaid,8,8
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  cobb,10,9
+  VoucherNumber,4,4
+  nocharge,4,4
+TABLE:ZIPCOBBappoint
+  AttyCode,10,6
+  ZipCode,10,9
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  cobb,10,9
+  Date,8,8
+  VoucherNumber,4,4
+  JurisdictionCode,10,3
+TABLE:zipcodes
+  cobb,10,9
+  notcobb,10,9
+TABLE:ZIPnotCOBB
+  AttyCode,10,6
+  ZipCode,10,9
+  JurisdictionCode,10,3
+  InCourtHours,10,4
+  OutCourtHours,10,4
+  TotalVoucherAmt,5,8
+  TotalAmountPaid,5,8
+  DateVchrPaid,8,8
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  cobb,10,9
+  VoucherNumber,4,4
+  nocharge,4,4
+TABLE:ZIPNOTCOBBappoint
+  AttyCode,10,6
+  ZipCode,10,9
+  FirstName,10,20
+  MiddleName,10,10
+  LastName,10,25
+  notcobb,10,9
+  Date,8,8
+  VoucherNumber,4,4
+  JurisdictionCode,10,3

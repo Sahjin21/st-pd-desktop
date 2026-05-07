@@ -65,7 +65,6 @@ public partial class DefendantSearchViewModel : ObservableObject
             await using var db = await _dbFactory.CreateDbContextAsync();
             var defendants = await db.Defendants
                 .Where(d => !string.IsNullOrWhiteSpace(d.LastName))
-                .Take(1000)
                 .ToListAsync();
             _allDefendants = defendants;
 
@@ -95,42 +94,43 @@ public partial class DefendantSearchViewModel : ObservableObject
             foreach (var n in firstNames) FirstNameSuggestions.Add(n);
             foreach (var s in soids) SoidSuggestions.Add(s);
 
-            // Seed filtered collections with all names initially (before user types anything)
-            FilteredFirstNameSuggestions.Clear();
-            FilteredLastNameSuggestions.Clear();
-            foreach (var fn in firstNames) FilteredFirstNameSuggestions.Add(fn);
-            foreach (var ln in lastNames) FilteredLastNameSuggestions.Add(ln);
+            RefreshNameSuggestionFilters();
         }
         catch { /* non-fatal */ }
     }
 
     partial void OnLastNameSearchChanged(string value)
     {
-        // Only cascade-filter first names when the chosen value is a real last name in the DB.
-        // This prevents wrong filtering on partial keystrokes that don't match anything.
-        var chosen = value.Trim();
-        var isValidLastName = !string.IsNullOrEmpty(chosen) &&
-                              LastNameSuggestions.Any(ln => ln.Equals(chosen, StringComparison.OrdinalIgnoreCase));
-        FilterFirstNameSuggestions(FirstNameSearch.Trim(), isValidLastName ? chosen : string.Empty);
+        RefreshNameSuggestionFilters();
     }
 
     partial void OnFirstNameSearchChanged(string value)
     {
-        // Only cascade-filter last names when the chosen value is a real first name in the DB.
-        var chosen = value.Trim();
-        var isValidFirstName = !string.IsNullOrEmpty(chosen) &&
-                               FirstNameSuggestions.Any(fn => fn.Equals(chosen, StringComparison.OrdinalIgnoreCase));
-        FilterLastNameSuggestions(LastNameSearch.Trim(), isValidFirstName ? chosen : string.Empty);
+        RefreshNameSuggestionFilters();
+    }
+
+    private void RefreshNameSuggestionFilters()
+    {
+        var typedLast = LastNameSearch.Trim();
+        var typedFirst = FirstNameSearch.Trim();
+
+        var chosenLast = !string.IsNullOrEmpty(typedLast) &&
+                         LastNameSuggestions.Any(ln => ln.Equals(typedLast, StringComparison.OrdinalIgnoreCase))
+            ? typedLast
+            : string.Empty;
+
+        var chosenFirst = !string.IsNullOrEmpty(typedFirst) &&
+                          FirstNameSuggestions.Any(fn => fn.Equals(typedFirst, StringComparison.OrdinalIgnoreCase))
+            ? typedFirst
+            : string.Empty;
+
+        FilterFirstNameSuggestions(typedFirst, chosenLast);
+        FilterLastNameSuggestions(typedLast, chosenFirst);
     }
 
     private void FilterFirstNameSuggestions(string typedFirst, string chosenLast)
     {
         FilteredFirstNameSuggestions.Clear();
-
-        // Use _allDefendants if available, otherwise fall back to LastNameSuggestions for the name list
-        IEnumerable<Defendant> source = _allDefendants.Count > 0
-            ? _allDefendants
-            : LastNameSuggestions.Select(ln => new Defendant { LastName = ln }); // dummy source with last names
 
         if (string.IsNullOrEmpty(chosenLast))
         {
@@ -205,7 +205,6 @@ public partial class DefendantSearchViewModel : ObservableObject
             // Load all — data is small enough; filter client-side for reliability
             var all = await db.Defendants
                 .Include(d => d.Qualify)
-                .Take(500)
                 .ToListAsync();
 
             var query = all.AsEnumerable();
